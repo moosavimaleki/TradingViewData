@@ -23,10 +23,6 @@ jobs:
       HTTP_PROXY: ${{ secrets.HTTP_PROXY || secrets.HTTPS_PROXY }}
       ALL_PROXY: ${{ secrets.ALL_PROXY }}
       NO_PROXY: ${{ secrets.NO_PROXY || vars.NO_PROXY }}
-      https_proxy: ${{ secrets.HTTPS_PROXY }}
-      http_proxy: ${{ secrets.HTTP_PROXY || secrets.HTTPS_PROXY }}
-      all_proxy: ${{ secrets.ALL_PROXY }}
-      no_proxy: ${{ secrets.NO_PROXY || vars.NO_PROXY }}
 
     steps:
       - uses: actions/checkout@v4
