@@ -4,6 +4,8 @@ import asyncio
 import logging
 import os
 import re
+import random
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -49,6 +51,10 @@ class TradingViewWebSocketSource(DataSource):
         self.page_step = int(config.get("page_step") or 2000)
         self.max_fetch_bars = int(config.get("max_fetch_bars") or 12000)
         self.default_fetch_bars = int(config.get("default_fetch_bars") or 10000)
+        self.max_retries = int(config.get("max_retries") or os.getenv("TV_WS_RETRIES", "6"))
+        self.retry_base_sleep_sec = float(
+            config.get("retry_base_sleep_sec") or os.getenv("TV_WS_RETRY_BASE_SLEEP_SEC", "2")
+        )
 
         # Contract defaults for symbol-only input.
         self.default_broker = str(config.get("default_broker") or "").strip().upper()
@@ -137,24 +143,61 @@ class TradingViewWebSocketSource(DataSource):
     def fetch_latest(self, symbol: str, timeframe: str, *, n_bars: int) -> pd.DataFrame:
         tv_symbol, _, _ = self._to_tv_symbol(symbol)
         interval = self._to_tv_interval(timeframe)
-        df = asyncio.run(
-            fetch_bars_ws(
-                chart_url=self.chart_url,
-                ws_url=self.ws_url,
-                ws_origin=self.ws_origin,
-                cookie_string="",  # guest token by default
-                auth_token=self.auth_token,
-                symbol=tv_symbol,
-                interval=interval,
-                range_type=self.range_type,
-                range_base_interval=self.range_base_interval,
-                phantom_bars=self.phantom_bars,
-                n_bars=int(n_bars),
-                timeout_sec=int(self.timeout_sec),
-                page_step=int(self.page_step),
-            )
+        max_attempts = max(1, int(self.max_retries))
+        last_exc: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return asyncio.run(
+                    fetch_bars_ws(
+                        chart_url=self.chart_url,
+                        ws_url=self.ws_url,
+                        ws_origin=self.ws_origin,
+                        cookie_string="",  # guest token by default
+                        auth_token=self.auth_token,
+                        symbol=tv_symbol,
+                        interval=interval,
+                        range_type=self.range_type,
+                        range_base_interval=self.range_base_interval,
+                        phantom_bars=self.phantom_bars,
+                        n_bars=int(n_bars),
+                        timeout_sec=int(self.timeout_sec),
+                        page_step=int(self.page_step),
+                    )
+                )
+            except Exception as e:
+                last_exc = e
+                if attempt >= max_attempts or not self._is_retryable_ws_error(e):
+                    raise
+                backoff = min(90.0, float(self.retry_base_sleep_sec) * (2 ** (attempt - 1)))
+                jitter = random.random() * 0.5 * backoff
+                sleep_s = backoff + jitter
+                logger.warning(
+                    f"tradingview fetch_latest retry {attempt}/{max_attempts} for {symbol} {timeframe}: {e}; "
+                    f"sleep={sleep_s:.1f}s"
+                )
+                time.sleep(sleep_s)
+
+        if last_exc:
+            raise last_exc
+        return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "bar_index"])
+
+    @staticmethod
+    def _is_retryable_ws_error(exc: Exception) -> bool:
+        text = str(exc)
+        retry_signals = (
+            "received 1000 (OK); then sent 1000 (OK)",  # graceful close by server
+            "ConnectionClosed",
+            "timed out",
+            "Timeout",
+            "HTTP 429",
+            "HTTP 426",
+            "UNEXPECTED_EOF",
+            "SSL",
+            "reset by peer",
+            "ServerDisconnectedError",
         )
-        return df
+        return any(sig in text for sig in retry_signals)
 
     def fetch_data(
         self,
@@ -218,4 +261,3 @@ class TradingViewWebSocketSource(DataSource):
         md = super().create_metadata(symbol=symbol, timeframe=timeframe, broker=broker)
         md.collected_at = datetime.now(timezone.utc)
         return md
-

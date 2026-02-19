@@ -103,6 +103,8 @@ class Settings:
                     "page_step": 2000,
                     "max_fetch_bars": 12000,
                     "default_fetch_bars": 10000,
+                    "max_retries": 6,
+                    "retry_base_sleep_sec": 2,
                     "range_overlap_bars": 300,
                     "range_initial_fetch_bars": 2000,
                     "range_max_fetch_bars": 12000
