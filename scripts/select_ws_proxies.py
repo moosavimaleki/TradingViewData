@@ -5,8 +5,10 @@ import argparse
 import asyncio
 import random
 import re
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
+from urllib.parse import urlsplit
 
 import requests
 import websockets
@@ -41,6 +43,18 @@ def _parse_args() -> argparse.Namespace:
         "--protocols",
         default="http,https,socks4,socks5",
         help="Allowed protocols (comma-separated).",
+    )
+    p.add_argument(
+        "--progress-interval",
+        type=float,
+        default=5.0,
+        help="Print scan progress every N seconds.",
+    )
+    p.add_argument(
+        "--max-runtime",
+        type=float,
+        default=480.0,
+        help="Hard timeout for the whole scan (seconds).",
     )
     p.add_argument("--out-file", default=".ws_proxies.txt", help="Output file with one proxy per line.")
     p.add_argument("--seed", type=int, default=1337, help="Random seed for deterministic shuffle.")
@@ -114,6 +128,19 @@ def _protocol_rank(proto: str) -> int:
     return 0
 
 
+def _redact_proxy(proxy: str) -> str:
+    try:
+        parts = urlsplit(proxy)
+        if not parts.username:
+            return proxy
+        host = parts.hostname or ""
+        if parts.port:
+            host = f"{host}:{parts.port}"
+        return f"{parts.scheme}://{parts.username}:***@{host}"
+    except Exception:
+        return proxy
+
+
 async def _check_proxy(proxy: str, timeout_sec: float) -> bool:
     try:
         async with asyncio.timeout(timeout_sec):
@@ -122,6 +149,7 @@ async def _check_proxy(proxy: str, timeout_sec: float) -> bool:
                 origin=TEST_ORIGIN,
                 user_agent_header=UA,
                 proxy=proxy,
+                open_timeout=timeout_sec,
                 ping_interval=None,
                 close_timeout=2,
                 max_size=1024 * 1024,
@@ -136,37 +164,69 @@ async def _find_healthy_proxies(
     target_count: int,
     timeout_sec: float,
     concurrency: int,
+    progress_interval_sec: float,
 ) -> List[str]:
     good: List[str] = []
-    q: asyncio.Queue[str] = asyncio.Queue()
-    lock = asyncio.Lock()
+    total = len(candidates)
+    tested = 0
+    failed = 0
+    started = time.monotonic()
+    last_log = started
 
-    for c in candidates:
-        q.put_nowait(c)
+    sem = asyncio.Semaphore(max(1, int(concurrency)))
 
-    async def worker() -> None:
-        while True:
-            if q.empty():
-                return
-            proxy = await q.get()
-            try:
-                async with lock:
-                    if len(good) >= target_count:
-                        return
-                ok = await _check_proxy(proxy, timeout_sec)
-                if ok:
-                    async with lock:
-                        if proxy not in good and len(good) < target_count:
-                            good.append(proxy)
-            finally:
-                q.task_done()
+    async def probe(proxy: str) -> tuple[str, bool]:
+        async with sem:
+            ok = await _check_proxy(proxy, timeout_sec)
+        return proxy, ok
 
-    workers = [asyncio.create_task(worker()) for _ in range(max(1, int(concurrency)))]
-    await q.join()
-    for w in workers:
-        w.cancel()
-    await asyncio.gather(*workers, return_exceptions=True)
-    return good
+    tasks = [asyncio.create_task(probe(proxy)) for proxy in candidates]
+
+    try:
+        for fut in asyncio.as_completed(tasks):
+            proxy, ok = await fut
+            tested += 1
+            if ok and proxy not in good:
+                good.append(proxy)
+                print(
+                    f"[proxy-scan] healthy={len(good)}/{target_count} "
+                    f"proxy={_redact_proxy(proxy)}",
+                    flush=True,
+                )
+            if not ok:
+                failed += 1
+
+            now = time.monotonic()
+            if (now - last_log) >= max(1.0, float(progress_interval_sec)):
+                elapsed = now - started
+                print(
+                    f"[proxy-scan] progress tested={tested}/{total} healthy={len(good)} "
+                    f"failed={failed} elapsed={elapsed:.1f}s",
+                    flush=True,
+                )
+                last_log = now
+
+            if len(good) >= target_count:
+                print(
+                    f"[proxy-scan] target reached: {len(good)}/{target_count}. "
+                    "canceling remaining checks.",
+                    flush=True,
+                )
+                break
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    elapsed = time.monotonic() - started
+    print(
+        f"[proxy-scan] finished tested={tested}/{total} healthy={len(good)} "
+        f"failed={failed} elapsed={elapsed:.1f}s",
+        flush=True,
+    )
+    return good[:target_count]
 
 
 async def _run_health_scan(
@@ -174,8 +234,10 @@ async def _run_health_scan(
     target_count: int,
     timeout_sec: float,
     concurrency: int,
+    progress_interval_sec: float,
 ) -> List[str]:
     loop = asyncio.get_running_loop()
+    prev_handler = loop.get_exception_handler()
 
     def _exception_handler(_loop: asyncio.AbstractEventLoop, context: Dict[str, Any]) -> None:
         exc = context.get("exception")
@@ -196,7 +258,16 @@ async def _run_health_scan(
         _loop.default_exception_handler(context)
 
     loop.set_exception_handler(_exception_handler)
-    return await _find_healthy_proxies(candidates, target_count, timeout_sec, concurrency)
+    try:
+        return await _find_healthy_proxies(
+            candidates,
+            target_count,
+            timeout_sec,
+            concurrency,
+            progress_interval_sec,
+        )
+    finally:
+        loop.set_exception_handler(prev_handler)
 
 
 def main() -> None:
@@ -204,6 +275,12 @@ def main() -> None:
     target_count = max(1, int(args.count))
     min_count = target_count if args.min_count is None else max(1, int(args.min_count))
     allowed_protocols = _normalize_allowed_protocols(args.protocols)
+    print(
+        f"[proxy-scan] start count={target_count} min_count={min_count} timeout={args.timeout}s "
+        f"concurrency={args.concurrency} max_candidates={args.max_candidates} "
+        f"max_runtime={args.max_runtime}s protocols={sorted(allowed_protocols)}",
+        flush=True,
+    )
 
     all_candidates: List[str] = []
     errors: List[str] = []
@@ -211,6 +288,7 @@ def main() -> None:
 
     for url in DEFAULT_JSON_SOURCES:
         try:
+            print(f"[proxy-scan] fetching json source: {url}", flush=True)
             payload = _fetch_json(url)
             if isinstance(payload, list):
                 for item in payload:
@@ -230,13 +308,16 @@ def main() -> None:
                         }
                     )
         except Exception as e:
+            print(f"[proxy-scan] warning source failed: {url} err={e}", flush=True)
             errors.append(f"{url}: {e}")
 
     for url in DEFAULT_TEXT_SOURCES:
         try:
+            print(f"[proxy-scan] fetching text source: {url}", flush=True)
             txt = _fetch_text(url)
             all_candidates.extend(_iter_raw_proxies(txt))
         except Exception as e:
+            print(f"[proxy-scan] warning source failed: {url} err={e}", flush=True)
             errors.append(f"{url}: {e}")
 
     if scored_candidates:
@@ -256,28 +337,40 @@ def main() -> None:
     if args.max_candidates and int(args.max_candidates) > 0:
         filtered = filtered[: int(args.max_candidates)]
 
+    print(f"[proxy-scan] candidates_after_filter={len(filtered)}", flush=True)
+
     if not filtered:
         detail = "; ".join(errors) if errors else "no candidates after filtering"
         raise SystemExit(f"No proxy candidates found ({detail})")
 
-    healthy = asyncio.run(
-        _run_health_scan(
-            candidates=filtered,
-            target_count=target_count,
-            timeout_sec=float(args.timeout),
-            concurrency=int(args.concurrency),
+    try:
+        healthy = asyncio.run(
+            asyncio.wait_for(
+                _run_health_scan(
+                    candidates=filtered,
+                    target_count=target_count,
+                    timeout_sec=float(args.timeout),
+                    concurrency=int(args.concurrency),
+                    progress_interval_sec=float(args.progress_interval),
+                ),
+                timeout=float(args.max_runtime),
+            )
         )
-    )
+    except TimeoutError:
+        raise SystemExit(
+            f"Proxy scan timed out after {float(args.max_runtime):.1f}s. "
+            "Try lowering --count or raising --max-runtime."
+        )
 
     out_path = Path(args.out_file).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(healthy) + ("\n" if healthy else ""), encoding="utf-8")
 
-    print(f"candidates_tested={len(filtered)}")
-    print(f"healthy_found={len(healthy)}")
-    print(f"out_file={out_path}")
+    print(f"candidates_tested={len(filtered)}", flush=True)
+    print(f"healthy_found={len(healthy)}", flush=True)
+    print(f"out_file={out_path}", flush=True)
     for p in healthy:
-        print(f"healthy={p}")
+        print(f"healthy={p}", flush=True)
 
     if len(healthy) < min_count:
         raise SystemExit(

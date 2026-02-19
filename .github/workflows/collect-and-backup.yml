@@ -66,15 +66,21 @@ jobs:
           python scripts/pull_drive_state.py --remote gdrive: --local-dir data --tail-chunks 2 --verbose
 
       - name: Discover healthy websocket proxies
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
           set -euo pipefail
-          python scripts/select_ws_proxies.py \
+          timeout 9m python scripts/select_ws_proxies.py \
             --count 10 \
             --min-count 10 \
             --timeout 8 \
             --concurrency 64 \
             --max-candidates 1000 \
+            --progress-interval 5 \
+            --max-runtime 500 \
             --out-file .ws_proxies.txt
+
+          echo "selected_proxy_count=$(wc -l < .ws_proxies.txt)"
 
           {
             echo "TV_WS_PROXY<<EOF"
