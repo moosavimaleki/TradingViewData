@@ -5,6 +5,7 @@ on:
     - cron: "0 6 * * *"
     - cron: "0 18 * * *"
     - cron: "55 18 * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -50,13 +51,13 @@ jobs:
           printf '%s' "$GDRIVE_SA_JSON" > "$SA_PATH"
 
           mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf <<EOF
-          [gdrive]
-          type = drive
-          scope = drive
-          service_account_file = $SA_PATH
-          root_folder_id = $GDRIVE_FOLDER_ID
-          EOF
+          printf "%s\n" \
+            "[gdrive]" \
+            "type = drive" \
+            "scope = drive" \
+            "service_account_file = $SA_PATH" \
+            "root_folder_id = ${GDRIVE_FOLDER_ID}" \
+            > ~/.config/rclone/rclone.conf
 
       - name: Pull manifests + tail chunks from Drive
         run: |
