@@ -22,7 +22,7 @@
   - بعد از اجرا فقط فایل‌های تغییر کرده آپلود می‌شوند.
 
 ## ساختار دیتا
-
+f
 ```
 data/
   <source>/
@@ -46,34 +46,3 @@ python -m pip install -r requirements.txt
 python -m data_collector.run --config config/collect_jobs.json --dry-run
 python -m data_collector.run --config config/collect_jobs.json
 ```
-
-## GitHub Actions
-
-Workflow آماده:  
-`.github/workflows/collect-and-backup.yml`
-
-زمان‌بندی فعلی:
-- `06:00 UTC`
-- `18:00 UTC`
-
-### Secrets موردنیاز
-
-حداقل:
-- `GDRIVE_SA_JSON`
-- `GDRIVE_FOLDER_ID`
-
-اختیاری (بسته به سورس):
-- `FARAZ_COOKIES`
-- `TV_FASTPASS_COOKIE_STRING`
-- `TV_FASTPASS_CHART_URL`
-- `TV_FASTPASS_WS_URL`
-- `TV_FASTPASS_WS_ORIGIN`
-- `TV_AUTH_TOKEN`
-
-## نکات
-
-- فایل `data/` در `.gitignore` است و وارد ریپو نمی‌شود.
-- برای تغییر تعداد کندل هر chunk:
-  - `storage.chunk_size` در `data_collector/config/settings.json`
-- برای میزان بازنویسی tail هنگام merge:
-  - `storage.merge_tail_chunks` در `data_collector/config/settings.json`
