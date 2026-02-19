@@ -307,7 +307,6 @@ async def fetch_bars_ws(
         origin=ws_origin_final,
         user_agent_header=user_agent,
         additional_headers=headers,
-        proxy=None,
         ping_interval=None,
         max_size=None,
     ) as ws:

@@ -26,8 +26,8 @@
   - بعد از اجرا فقط فایل‌های تغییر کرده آپلود می‌شوند.
 
 ## ساختار دیتا
-f
-```
+
+```text
 data/
   <source>/
     <broker>/
@@ -50,3 +50,31 @@ python -m pip install -r requirements.txt
 python -m data_collector.run --config config/collect_jobs.json --dry-run
 python -m data_collector.run --config config/collect_jobs.json
 ```
+
+## GitHub Actions
+
+Workflow اصلی:
+- `.github/workflows/collect-and-backup.yml`
+
+Workflow تست دیده‌شدن:
+- `.github/workflows/ping.yml`
+
+## Secrets موردنیاز
+
+حداقل:
+- `GDRIVE_SA_JSON`
+- `GDRIVE_FOLDER_ID`
+
+اختیاری (بسته به سورس):
+- `FARAZ_COOKIES`
+- `TV_FASTPASS_COOKIE_STRING`
+- `TV_FASTPASS_CHART_URL`
+- `TV_FASTPASS_WS_URL`
+- `TV_FASTPASS_WS_ORIGIN`
+- `TV_AUTH_TOKEN`
+
+اختیاری (برای شبکه/پروکسی Runner):
+- `HTTPS_PROXY`
+- `HTTP_PROXY` (اگر خالی باشد از `HTTPS_PROXY` استفاده می‌شود)
+- `ALL_PROXY`
+- `NO_PROXY`
