@@ -151,6 +151,8 @@ class DataCollector:
 
     @staticmethod
     def _ensure_utc_datetime(dt: datetime) -> datetime:
+        if hasattr(dt, "to_pydatetime"):
+            dt = dt.to_pydatetime()
         if dt.tzinfo is None:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
@@ -269,6 +271,61 @@ class DataCollector:
         merged = merged.drop_duplicates(subset=["timestamp"], keep="last").reset_index(drop=True)
         merged = merged[(merged["timestamp"] >= pd.Timestamp(start_utc)) & (merged["timestamp"] <= pd.Timestamp(end_utc))]
         return merged.reset_index(drop=True)
+
+    def _drop_unstable_tail_candle(
+        self,
+        *,
+        df: pd.DataFrame,
+        timeframe: str,
+        end_date: datetime,
+        source_name: str,
+        symbol: str,
+    ) -> tuple[pd.DataFrame, bool]:
+        """
+        Remove the last in-progress candle before persisting.
+
+        Rules:
+        - Range bars (e.g. 100R): always drop the latest bar.
+        - Time bars: drop the last bar only if it belongs to the currently open bucket.
+        """
+        if df.empty or "timestamp" not in df.columns:
+            return df, False
+
+        work = df.copy()
+        work["timestamp"] = pd.to_datetime(work["timestamp"], utc=True, format="mixed", errors="coerce")
+        work = work.dropna(subset=["timestamp"]).sort_values("timestamp")
+        work = work.drop_duplicates(subset=["timestamp"], keep="last").reset_index(drop=True)
+        if work.empty:
+            return work, False
+
+        tf = str(timeframe).strip()
+
+        # Range bars are non-time-based and the latest bar is typically still moving.
+        if re.fullmatch(r"[0-9]+[rR]", tf):
+            trimmed = work.iloc[:-1].copy() if len(work) > 0 else work
+            dropped = len(trimmed) < len(work)
+            if dropped:
+                logger.info(f"Dropped unstable tail range-bar for {symbol} {timeframe} from {source_name}")
+            return trimmed.reset_index(drop=True), dropped
+
+        seconds_per_bar = self._timeframe_seconds(tf)
+        if not seconds_per_bar:
+            return work, False
+
+        end_utc = self._ensure_utc_datetime(end_date)
+        bucket_open_epoch = (int(end_utc.timestamp()) // int(seconds_per_bar)) * int(seconds_per_bar)
+        bucket_open = pd.Timestamp(bucket_open_epoch, unit="s", tz="UTC")
+
+        last_ts = pd.Timestamp(work["timestamp"].iloc[-1])
+        if last_ts >= bucket_open:
+            trimmed = work.iloc[:-1].copy()
+            logger.info(
+                f"Dropped unstable tail candle for {symbol} {timeframe} from {source_name}; "
+                f"last_ts={last_ts.isoformat()}, bucket_open={bucket_open.isoformat()}"
+            )
+            return trimmed.reset_index(drop=True), True
+
+        return work, False
     
     
     def collect(
@@ -288,10 +345,12 @@ class DataCollector:
         
         if end_date is None:
             end_date = datetime.now(timezone.utc)
+        end_date = self._ensure_utc_datetime(end_date)
         
         if start_date is None:
             lookback_days = self.settings.get('collection.default_lookback_days', 30)
             start_date = end_date - timedelta(days=lookback_days)
+        start_date = self._ensure_utc_datetime(start_date)
         
         results = {
             'success': [],
@@ -348,9 +407,23 @@ class DataCollector:
                         if cutoff_ts is not None and not df.empty:
                             df = df[df["timestamp"] >= cutoff_ts].copy()
 
+                        df, _ = self._drop_unstable_tail_candle(
+                            df=df,
+                            timeframe=timeframe,
+                            end_date=end_date,
+                            source_name=source_name,
+                            symbol=symbol,
+                        )
                         if df.empty:
-                            logger.warning(f"No data received for {symbol} from {source_name} (range bars)")
-                            results["failed"].append({"symbol": symbol, "source": source_name, "error": "No data received"})
+                            logger.info(f"No stable range-bar data to save for {symbol} from {source_name}")
+                            results["success"].append(
+                                {
+                                    "symbol": symbol,
+                                    "source": source_name,
+                                    "records": 0,
+                                    "status": "no_stable_candle",
+                                }
+                            )
                             continue
 
                         cm = ContractManager()
@@ -402,14 +475,22 @@ class DataCollector:
                             f"will collect from {actual_start_date} with overlap"
                         )
                     elif last_timestamp and update_only:
-                        # برای update_only، فقط از آخرین timestamp شروع کن
-                        actual_start_date = last_timestamp + timedelta(seconds=1)
+                        # برای update_only هم overlap داشته باش تا کندل‌های در حال تشکیل در اجرای بعدی اصلاح شوند.
+                        calculated_start = last_timestamp - overlap_buffer
+                        actual_start_date = max(start_date, calculated_start)
+                        actual_start_date = self._ensure_utc_datetime(actual_start_date)
                         
                         if actual_start_date >= end_date:
                             logger.info(
                                 f"No new data needed for {symbol} from {source_name} - "
                                 f"last data: {last_timestamp}, current time: {end_date}"
                             )
+                            results['success'].append({
+                                'symbol': symbol,
+                                'source': source_name,
+                                'records': 0,
+                                'status': 'up_to_date'
+                            })
                             continue
                     elif not last_timestamp:
                         actual_start_date = start_date
@@ -426,13 +507,21 @@ class DataCollector:
                         end_date=end_date,
                         timeframe=timeframe,
                     )
+                    data, _ = self._drop_unstable_tail_candle(
+                        df=data,
+                        timeframe=timeframe,
+                        end_date=end_date,
+                        source_name=source_name,
+                        symbol=symbol,
+                    )
                     
                     if data.empty:
-                        logger.warning(f"No data received for {symbol} from {source_name}")
-                        results['failed'].append({
+                        logger.info(f"No stable data to save for {symbol} from {source_name}")
+                        results['success'].append({
                             'symbol': symbol,
                             'source': source_name,
-                            'error': 'No data received'
+                            'records': 0,
+                            'status': 'no_stable_candle'
                         })
                         continue
                     
