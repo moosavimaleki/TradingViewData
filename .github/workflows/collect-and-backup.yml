@@ -1,0 +1,96 @@
+name: Collect & Backup Market Data
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: market-data-collector
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install rclone
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y rclone
+
+      - name: Configure rclone (Google Drive Service Account)
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${GDRIVE_SA_JSON}"
+          test -n "${GDRIVE_FOLDER_ID}"
+
+          SA_PATH="$GITHUB_WORKSPACE/sa.json"
+          printf '%s' "$GDRIVE_SA_JSON" > "$SA_PATH"
+
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+[gdrive]
+type = drive
+scope = drive
+service_account_file = $SA_PATH
+root_folder_id = $GDRIVE_FOLDER_ID
+EOF
+
+      - name: Pull manifests + tail chunks from Drive
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          python scripts/pull_drive_state.py --remote gdrive: --local-dir data --tail-chunks 2 --verbose
+
+      - name: Run collector
+        id: collector
+        env:
+          FARAZ_COOKIES: ${{ secrets.FARAZ_COOKIES }}
+          TV_FASTPASS_COOKIE_STRING: ${{ secrets.TV_FASTPASS_COOKIE_STRING }}
+          TV_FASTPASS_CHART_URL: ${{ secrets.TV_FASTPASS_CHART_URL }}
+          TV_FASTPASS_WS_URL: ${{ secrets.TV_FASTPASS_WS_URL }}
+          TV_FASTPASS_WS_ORIGIN: ${{ secrets.TV_FASTPASS_WS_ORIGIN }}
+          TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python -m data_collector.run --config config/collect_jobs.json --fail-on-error | tee run_summary.json
+
+      - name: Upload changed data to Drive
+        if: always()
+        run: |
+          set -euo pipefail
+          rclone copy ./data gdrive: \
+            --include "**/manifest.json" \
+            --include "**/*.csv.gz" \
+            --include "**/*.csv" \
+            --create-empty-src-dirs \
+            -v
+
+      - name: Upload run summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-summary
+          path: run_summary.json
+          if-no-files-found: ignore

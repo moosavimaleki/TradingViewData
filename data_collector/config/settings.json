@@ -1,0 +1,80 @@
+{
+  "sources": {
+    "yahoo_finance": {
+      "enabled": false,
+      "rate_limit": {
+        "requests_per_minute": 60,
+        "requests_per_hour": 2000
+      }
+    },
+    "faraz": {
+      "enabled": false,
+      "base_url": "https://ir2.faraz.io/api/customer/trading-view/history",
+      "timeout_sec": 45,
+      "max_retries": 3,
+      "retry_sleep_sec": 1.0,
+      "max_pages": 800,
+      "first_request_countback": 500,
+      "empty_page_max_jumps": 5
+    },
+    "tv_fastpass": {
+      "enabled": false,
+      "cookie_string": "",
+      "cookie_file": "cookie.md",
+      "chart_url": "https://tradingview.gettyimages.ir/chart/mx4QWE0a/",
+      "ws_url": "",
+      "ws_origin": "",
+      "default_broker": "BLACKBULL",
+      "range_type": "BarSetRange@tv-basicstudies-72!",
+      "range_base_interval": "1",
+      "phantom_bars": false,
+      "timeout_sec": 60,
+      "page_step": 2000,
+      "max_fetch_bars": 25000,
+      "default_fetch_bars": 25000,
+      "range_overlap_bars": 10,
+      "range_initial_fetch_bars": 2000,
+      "range_max_fetch_bars": 12000
+    },
+    "tradingview": {
+      "enabled": true,
+      "chart_url": "https://www.tradingview.com/chart/",
+      "ws_url": "",
+      "ws_origin": "",
+      "auth_token": "unauthorized_user_token",
+      "default_broker": "BLACKBULL",
+      "range_type": "BarSetRange@tv-basicstudies-72!",
+      "range_base_interval": "1",
+      "phantom_bars": false,
+      "timeout_sec": 60,
+      "page_step": 2000,
+      "max_fetch_bars": 25000,
+      "default_fetch_bars": 25000,
+      "range_overlap_bars": 10,
+      "range_initial_fetch_bars": 2000,
+      "range_max_fetch_bars": 12000
+    }
+  },
+  "storage": {
+    "type": "file",
+    "base_path": null,
+    "max_file_size_mb": 100,
+    "compression": true,
+    "chunk_size": 10000,
+    "merge_tail_chunks": 2,
+    "retention_days": 365
+  },
+  "collection": {
+    "default_timeframe": "1m",
+    "default_lookback_days": 30,
+    "overlap_candles": 10,
+    "auto_update": false,
+    "update_interval_minutes": 60
+  },
+  "logging": {
+    "level": "INFO",
+    "file": null,
+    "max_size_mb": 50,
+    "backup_count": 5
+  }
+}

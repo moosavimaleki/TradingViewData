@@ -1,0 +1,81 @@
+{
+  "default": {
+    "update_only": true,
+    "fallback_start_date": "2017-01-01T00:00:00Z",
+    "delay_seconds": 1.0
+  },
+  "jobs": [
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1m",
+      "note": "Main high-frequency stream"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "5m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "15m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1h"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "4h"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XAUUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "EURUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "GBPUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDJPY",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": false,
+      "source": "faraz",
+      "symbol": "XAUUSD",
+      "broker": "FOREXCOM",
+      "timeframe": "1m",
+      "note": "Enable only if FARAZ_COOKIES secret is configured"
+    }
+  ]
+}
