@@ -39,6 +39,9 @@ class TradingViewWebSocketSource(DataSource):
         self.ws_origin = os.getenv("TV_WS_ORIGIN", str(config.get("ws_origin") or "")).strip()
         self.ws_proxy = os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")).strip()
         self.ws_proxy_pool = self._parse_proxy_pool(self.ws_proxy)
+        self.ws_direct_fallback = str(
+            os.getenv("TV_WS_DIRECT_FALLBACK", str(config.get("ws_direct_fallback", "1")))
+        ).strip().lower() in {"1", "true", "yes", "on"}
 
         # Auth: guest token by default (no cookies / login required).
         self.auth_token = os.getenv("TV_AUTH_TOKEN", str(config.get("auth_token") or "unauthorized_user_token")).strip()
@@ -107,10 +110,11 @@ class TradingViewWebSocketSource(DataSource):
         return out
 
     def _proxy_for_attempt(self, attempt: int) -> Optional[str]:
-        if not self.ws_proxy_pool:
-            return None
-        idx = max(0, int(attempt) - 1) % len(self.ws_proxy_pool)
-        return self.ws_proxy_pool[idx]
+        plan = list(self.ws_proxy_pool)
+        if self.ws_direct_fallback or not plan:
+            plan.append(None)
+        idx = max(0, int(attempt) - 1) % len(plan)
+        return plan[idx]
 
     def _resolve_symbol_and_broker(self, symbol: str) -> Tuple[str, str]:
         """
@@ -170,7 +174,8 @@ class TradingViewWebSocketSource(DataSource):
     def fetch_latest(self, symbol: str, timeframe: str, *, n_bars: int) -> pd.DataFrame:
         tv_symbol, _, _ = self._to_tv_symbol(symbol)
         interval = self._to_tv_interval(timeframe)
-        max_attempts = max(1, int(self.max_retries))
+        planned_variants = len(self.ws_proxy_pool) + (1 if self.ws_direct_fallback or not self.ws_proxy_pool else 0)
+        max_attempts = max(1, int(self.max_retries), planned_variants)
         last_exc: Exception | None = None
 
         for attempt in range(1, max_attempts + 1):

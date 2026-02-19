@@ -63,6 +63,12 @@ class TvFastpassSource(DataSource):
             os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")),
         ).strip()
         self.ws_proxy_pool = self._parse_proxy_pool(self.ws_proxy)
+        self.ws_direct_fallback = str(
+            os.getenv(
+                "TV_FASTPASS_WS_DIRECT_FALLBACK",
+                os.getenv("TV_WS_DIRECT_FALLBACK", str(config.get("ws_direct_fallback", "1"))),
+            )
+        ).strip().lower() in {"1", "true", "yes", "on"}
 
         # Range-bar config (TV internal type).
         self.range_type = str(config.get("range_type") or "BarSetRange@tv-basicstudies-72!")
@@ -129,10 +135,11 @@ class TvFastpassSource(DataSource):
         return out
 
     def _proxy_for_attempt(self, attempt: int) -> Optional[str]:
-        if not self.ws_proxy_pool:
-            return None
-        idx = max(0, int(attempt) - 1) % len(self.ws_proxy_pool)
-        return self.ws_proxy_pool[idx]
+        plan = list(self.ws_proxy_pool)
+        if self.ws_direct_fallback or not plan:
+            plan.append(None)
+        idx = max(0, int(attempt) - 1) % len(plan)
+        return plan[idx]
 
     def _resolve_symbol_and_broker(self, symbol: str) -> Tuple[str, str]:
         """
@@ -253,7 +260,9 @@ class TvFastpassSource(DataSource):
         except Exception:
             ws_url = self.ws_url
 
-        max_attempts = int(os.getenv("TV_FASTPASS_WS_RETRIES", "10"))
+        base_attempts = int(os.getenv("TV_FASTPASS_WS_RETRIES", "10"))
+        planned_variants = len(self.ws_proxy_pool) + (1 if self.ws_direct_fallback or not self.ws_proxy_pool else 0)
+        max_attempts = max(1, base_attempts, planned_variants)
         base_sleep = float(os.getenv("TV_FASTPASS_WS_RETRY_BASE_SLEEP_SEC", "10"))
 
         last_exc: Exception | None = None

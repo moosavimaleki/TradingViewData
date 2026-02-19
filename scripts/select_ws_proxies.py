@@ -3,15 +3,22 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import random
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 from urllib.parse import urlsplit
 
 import requests
-import websockets
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from data_collector.sources.tv_fastpass_client import fetch_bars_ws
 
 
 DEFAULT_JSON_SOURCES = [
@@ -24,12 +31,7 @@ DEFAULT_TEXT_SOURCES = [
     "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt",
 ]
 
-TEST_WS_URL = "wss://data.tradingview.com/socket.io/websocket"
-TEST_ORIGIN = "https://www.tradingview.com"
-UA = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
-)
+_PROBE_SETTINGS: Dict[str, Any] = {}
 
 
 def _parse_args() -> argparse.Namespace:
@@ -55,6 +57,42 @@ def _parse_args() -> argparse.Namespace:
         type=float,
         default=480.0,
         help="Hard timeout for the whole scan (seconds).",
+    )
+    p.add_argument(
+        "--test-chart-url",
+        default=os.getenv("TV_CHART_URL", "https://www.tradingview.com/chart/"),
+        help="TradingView chart URL used for proxy validation.",
+    )
+    p.add_argument(
+        "--test-ws-url",
+        default=os.getenv("TV_WS_URL", ""),
+        help="Optional websocket URL override for proxy validation.",
+    )
+    p.add_argument(
+        "--test-ws-origin",
+        default=os.getenv("TV_WS_ORIGIN", ""),
+        help="Optional websocket origin override for proxy validation.",
+    )
+    p.add_argument(
+        "--test-auth-token",
+        default=os.getenv("TV_AUTH_TOKEN", "unauthorized_user_token"),
+        help="Auth token used in TradingView WS probe.",
+    )
+    p.add_argument(
+        "--test-symbol",
+        default=os.getenv("TV_PROXY_TEST_SYMBOL", "BLACKBULL:XAUUSD"),
+        help="Symbol used in TradingView WS probe.",
+    )
+    p.add_argument(
+        "--test-interval",
+        default=os.getenv("TV_PROXY_TEST_INTERVAL", "1"),
+        help="Interval used in TradingView WS probe (e.g. 1, 5, 1D).",
+    )
+    p.add_argument(
+        "--test-min-bars",
+        type=int,
+        default=3,
+        help="Minimum bars required in probe result to mark proxy healthy.",
     )
     p.add_argument("--out-file", default=".ws_proxies.txt", help="Output file with one proxy per line.")
     p.add_argument("--seed", type=int, default=1337, help="Random seed for deterministic shuffle.")
@@ -143,18 +181,24 @@ def _redact_proxy(proxy: str) -> str:
 
 async def _check_proxy(proxy: str, timeout_sec: float) -> bool:
     try:
-        async with asyncio.timeout(timeout_sec):
-            async with websockets.connect(
-                TEST_WS_URL,
-                origin=TEST_ORIGIN,
-                user_agent_header=UA,
-                proxy=proxy,
-                open_timeout=timeout_sec,
-                ping_interval=None,
-                close_timeout=2,
-                max_size=1024 * 1024,
-            ):
-                return True
+        async with asyncio.timeout(timeout_sec + 8):
+            df = await fetch_bars_ws(
+                chart_url=_PROBE_SETTINGS["chart_url"],
+                ws_url=_PROBE_SETTINGS["ws_url"],
+                ws_origin=_PROBE_SETTINGS["ws_origin"],
+                cookie_string="",
+                auth_token=_PROBE_SETTINGS["auth_token"],
+                symbol=_PROBE_SETTINGS["symbol"],
+                interval=_PROBE_SETTINGS["interval"],
+                range_type="BarSetRange@tv-basicstudies-72!",
+                range_base_interval="1",
+                phantom_bars=False,
+                n_bars=max(5, int(_PROBE_SETTINGS["min_bars"]) + 2),
+                timeout_sec=max(8, int(timeout_sec)),
+                page_step=1000,
+                ws_proxy=proxy,
+            )
+        return len(df) >= int(_PROBE_SETTINGS["min_bars"])
     except Exception:
         return False
 
@@ -275,10 +319,23 @@ def main() -> None:
     target_count = max(1, int(args.count))
     min_count = target_count if args.min_count is None else max(1, int(args.min_count))
     allowed_protocols = _normalize_allowed_protocols(args.protocols)
+    global _PROBE_SETTINGS
+    _PROBE_SETTINGS = {
+        "chart_url": str(args.test_chart_url).strip(),
+        "ws_url": str(args.test_ws_url).strip(),
+        "ws_origin": str(args.test_ws_origin).strip(),
+        "auth_token": str(args.test_auth_token).strip() or "unauthorized_user_token",
+        "symbol": str(args.test_symbol).strip(),
+        "interval": str(args.test_interval).strip(),
+        "min_bars": max(1, int(args.test_min_bars)),
+    }
+
     print(
         f"[proxy-scan] start count={target_count} min_count={min_count} timeout={args.timeout}s "
         f"concurrency={args.concurrency} max_candidates={args.max_candidates} "
-        f"max_runtime={args.max_runtime}s protocols={sorted(allowed_protocols)}",
+        f"max_runtime={args.max_runtime}s protocols={sorted(allowed_protocols)} "
+        f"probe_symbol={_PROBE_SETTINGS['symbol']} probe_interval={_PROBE_SETTINGS['interval']} "
+        f"probe_min_bars={_PROBE_SETTINGS['min_bars']}",
         flush=True,
     )
 

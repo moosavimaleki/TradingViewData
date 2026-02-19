@@ -68,16 +68,20 @@ jobs:
       - name: Discover healthy websocket proxies
         env:
           PYTHONUNBUFFERED: "1"
+          TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
         run: |
           set -euo pipefail
           timeout 9m python scripts/select_ws_proxies.py \
             --count 10 \
-            --min-count 10 \
+            --min-count 3 \
             --timeout 8 \
             --concurrency 64 \
             --max-candidates 1000 \
             --progress-interval 5 \
             --max-runtime 500 \
+            --test-symbol BLACKBULL:XAUUSD \
+            --test-interval 1 \
+            --test-min-bars 3 \
             --out-file .ws_proxies.txt
 
           echo "selected_proxy_count=$(wc -l < .ws_proxies.txt)"
