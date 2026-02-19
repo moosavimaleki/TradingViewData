@@ -183,9 +183,15 @@ async def _run_health_scan(
         # Suppress noisy known failures from broken public proxies.
         if isinstance(exc, (EOFError, asyncio.InvalidStateError)):
             return
+        if isinstance(exc, AttributeError) and "recv_messages" in str(exc):
+            return
         if "Fatal error: protocol.data_received() call failed." in msg:
             return
         if "InvalidStateError" in msg:
+            return
+        if "SSLCertVerificationError" in msg and "connection_lost" in msg:
+            return
+        if "Connection.connection_lost(SSLCertVerifi" in msg:
             return
         _loop.default_exception_handler(context)
 

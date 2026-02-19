@@ -16,6 +16,24 @@ import requests
 import websockets
 
 
+def _should_suppress_ws_loop_exception(context: Dict[str, object]) -> bool:
+    exc = context.get("exception")
+    msg = str(context.get("message") or "")
+    if isinstance(exc, (EOFError, asyncio.InvalidStateError)):
+        return True
+    if isinstance(exc, AttributeError) and "recv_messages" in str(exc):
+        return True
+    if "Fatal error: protocol.data_received() call failed." in msg:
+        return True
+    if "InvalidStateError" in msg:
+        return True
+    if "SSLCertVerificationError" in msg and "connection_lost" in msg:
+        return True
+    if "Connection.connection_lost(SSLCertVerifi" in msg:
+        return True
+    return False
+
+
 def extract_auth_token_and_build_time(chart_url: str, cookies: Dict[str, str]) -> tuple[str, str | None]:
     """
     Fetch the chart HTML and extract:
@@ -195,6 +213,18 @@ async def fetch_bars_ws(
     ws_proxy: Optional[str] = None,
 ) -> pd.DataFrame:
     ws_url_final, ws_origin_final = infer_ws_url_and_origin(chart_url, ws_url, ws_origin)
+    loop = asyncio.get_running_loop()
+    prev_exc_handler = loop.get_exception_handler()
+
+    def _loop_exc_handler(lp: asyncio.AbstractEventLoop, context: Dict[str, object]) -> None:
+        if _should_suppress_ws_loop_exception(context):
+            return
+        if prev_exc_handler is not None:
+            prev_exc_handler(lp, context)
+        else:
+            lp.default_exception_handler(context)
+
+    loop.set_exception_handler(_loop_exc_handler)
 
     user_agent = (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -303,84 +333,87 @@ async def fetch_bars_ws(
             for payload in ws_decode(raw) or [raw]:
                 await handle_payload(ws, payload)
 
-    async with websockets.connect(
-        ws_url_final,
-        origin=ws_origin_final,
-        user_agent_header=user_agent,
-        additional_headers=headers,
-        proxy=(ws_proxy or None),
-        ping_interval=None,
-        max_size=None,
-    ) as ws:
-        await send_msg(ws, "set_auth_token", [auth_token])
-        await send_msg(ws, "chart_create_session", [chart_session, ""])
-        await send_msg(ws, "quote_create_session", [quote_session])
-        await send_msg(
-            ws,
-            "quote_set_fields",
-            [
-                quote_session,
-                "ch",
-                "chp",
-                "current_session",
-                "description",
-                "exchange",
-                "is_tradable",
-                "lp",
-                "lp_time",
-                "minmov",
-                "minmove2",
-                "original_name",
-                "pricescale",
-                "pro_name",
-                "short_name",
-                "type",
-                "update_mode",
-                "volume",
-                "currency_code",
-            ],
-        )
-        resolved_symbol_id = "symbol_1"
-        if is_range_bars:
-            resolve_payload = {
-                "inputs": {"phantomBars": bool(phantom_bars), "range": int(range_n)},
-                "symbol": {"adjustment": "splits", "session": "regular", "symbol": symbol},
-                "type": range_type,
-            }
-            resolve_string = "=" + json.dumps(resolve_payload, separators=(",", ":"))
-            create_interval = str(range_base_interval)
-        else:
-            resolve_string = f'={{"symbol":"{symbol}","adjustment":"splits","session":"regular"}}'
-            create_interval = str(interval_raw)
+    try:
+        async with websockets.connect(
+            ws_url_final,
+            origin=ws_origin_final,
+            user_agent_header=user_agent,
+            additional_headers=headers,
+            proxy=(ws_proxy or None),
+            ping_interval=None,
+            max_size=None,
+        ) as ws:
+            await send_msg(ws, "set_auth_token", [auth_token])
+            await send_msg(ws, "chart_create_session", [chart_session, ""])
+            await send_msg(ws, "quote_create_session", [quote_session])
+            await send_msg(
+                ws,
+                "quote_set_fields",
+                [
+                    quote_session,
+                    "ch",
+                    "chp",
+                    "current_session",
+                    "description",
+                    "exchange",
+                    "is_tradable",
+                    "lp",
+                    "lp_time",
+                    "minmov",
+                    "minmove2",
+                    "original_name",
+                    "pricescale",
+                    "pro_name",
+                    "short_name",
+                    "type",
+                    "update_mode",
+                    "volume",
+                    "currency_code",
+                ],
+            )
+            resolved_symbol_id = "symbol_1"
+            if is_range_bars:
+                resolve_payload = {
+                    "inputs": {"phantomBars": bool(phantom_bars), "range": int(range_n)},
+                    "symbol": {"adjustment": "splits", "session": "regular", "symbol": symbol},
+                    "type": range_type,
+                }
+                resolve_string = "=" + json.dumps(resolve_payload, separators=(",", ":"))
+                create_interval = str(range_base_interval)
+            else:
+                resolve_string = f'={{"symbol":"{symbol}","adjustment":"splits","session":"regular"}}'
+                create_interval = str(interval_raw)
 
-        await send_msg(ws, "resolve_symbol", [chart_session, resolved_symbol_id, resolve_string])
-        await send_msg(ws, "create_series", [chart_session, series_id, series_id, resolved_symbol_id, create_interval, initial_bars, ""])
-        await send_msg(ws, "switch_timezone", [chart_session, "exchange"])
+            await send_msg(ws, "resolve_symbol", [chart_session, resolved_symbol_id, resolve_string])
+            await send_msg(ws, "create_series", [chart_session, series_id, series_id, resolved_symbol_id, create_interval, initial_bars, ""])
+            await send_msg(ws, "switch_timezone", [chart_session, "exchange"])
 
-        # Consume initial batch.
-        await recv_for(ws, seconds=min(20, timeout_sec))
+            # Consume initial batch.
+            await recv_for(ws, seconds=min(20, timeout_sec))
 
-        # Backfill older bars in pages.
-        if page_step > 0:
-            stagnant_rounds = 0
-            for _ in range(100):
-                if len(bars_by_index) >= target_bars:
-                    break
-                if (time.time() - start) >= timeout_sec:
-                    break
-                prev_count = len(bars_by_index)
-                need = target_bars - prev_count
-                req = min(int(page_step), need)
-                if req <= 0:
-                    break
-                await send_msg(ws, "request_more_data", [chart_session, series_id, req])
-                await recv_for(ws, seconds=18)
-                if len(bars_by_index) <= prev_count:
-                    stagnant_rounds += 1
-                    if stagnant_rounds >= 3:
+            # Backfill older bars in pages.
+            if page_step > 0:
+                stagnant_rounds = 0
+                for _ in range(100):
+                    if len(bars_by_index) >= target_bars:
                         break
-                else:
-                    stagnant_rounds = 0
+                    if (time.time() - start) >= timeout_sec:
+                        break
+                    prev_count = len(bars_by_index)
+                    need = target_bars - prev_count
+                    req = min(int(page_step), need)
+                    if req <= 0:
+                        break
+                    await send_msg(ws, "request_more_data", [chart_session, series_id, req])
+                    await recv_for(ws, seconds=18)
+                    if len(bars_by_index) <= prev_count:
+                        stagnant_rounds += 1
+                        if stagnant_rounds >= 3:
+                            break
+                    else:
+                        stagnant_rounds = 0
+    finally:
+        loop.set_exception_handler(prev_exc_handler)
 
     if not bars_by_index:
         error_text = errors[0] if errors else "No explicit error payload."
