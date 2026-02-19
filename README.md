@@ -73,8 +73,7 @@ Workflow تست دیده‌شدن:
 - `TV_FASTPASS_WS_ORIGIN`
 - `TV_AUTH_TOKEN`
 
-اختیاری (برای شبکه/پروکسی Runner):
-- `HTTPS_PROXY`
-- `HTTP_PROXY` (اگر خالی باشد از `HTTPS_PROXY` استفاده می‌شود)
-- `ALL_PROXY`
-- `NO_PROXY`
+اختیاری (برای WebSocket پایتون، فقط در مرحله Run collector):
+- `TV_WS_PROXY`
+- `TV_FASTPASS_WS_PROXY`
+- `HTTPS_PROXY` (فقط به‌عنوان fallback اگر `TV_WS_PROXY` ست نشده باشد)

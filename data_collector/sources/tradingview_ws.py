@@ -37,6 +37,7 @@ class TradingViewWebSocketSource(DataSource):
         self.chart_url = os.getenv("TV_CHART_URL", str(config.get("chart_url") or "https://www.tradingview.com/chart/"))
         self.ws_url = os.getenv("TV_WS_URL", str(config.get("ws_url") or "")).strip()
         self.ws_origin = os.getenv("TV_WS_ORIGIN", str(config.get("ws_origin") or "")).strip()
+        self.ws_proxy = os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")).strip()
 
         # Auth: guest token by default (no cookies / login required).
         self.auth_token = os.getenv("TV_AUTH_TOKEN", str(config.get("auth_token") or "unauthorized_user_token")).strip()
@@ -163,6 +164,7 @@ class TradingViewWebSocketSource(DataSource):
                         n_bars=int(n_bars),
                         timeout_sec=int(self.timeout_sec),
                         page_step=int(self.page_step),
+                        ws_proxy=(self.ws_proxy or None),
                     )
                 )
             except Exception as e:

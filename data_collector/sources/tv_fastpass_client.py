@@ -8,7 +8,7 @@ import string
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 import pandas as pd
@@ -192,6 +192,7 @@ async def fetch_bars_ws(
     n_bars: int,
     timeout_sec: int,
     page_step: int,
+    ws_proxy: Optional[str] = None,
 ) -> pd.DataFrame:
     ws_url_final, ws_origin_final = infer_ws_url_and_origin(chart_url, ws_url, ws_origin)
 
@@ -307,6 +308,7 @@ async def fetch_bars_ws(
         origin=ws_origin_final,
         user_agent_header=user_agent,
         additional_headers=headers,
+        proxy=(ws_proxy or None),
         ping_interval=None,
         max_size=None,
     ) as ws:

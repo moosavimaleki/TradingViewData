@@ -58,6 +58,10 @@ class TvFastpassSource(DataSource):
         )
         self.ws_url = os.getenv("TV_FASTPASS_WS_URL", str(config.get("ws_url") or "")).strip()
         self.ws_origin = os.getenv("TV_FASTPASS_WS_ORIGIN", str(config.get("ws_origin") or "")).strip()
+        self.ws_proxy = os.getenv(
+            "TV_FASTPASS_WS_PROXY",
+            os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")),
+        ).strip()
 
         # Range-bar config (TV internal type).
         self.range_type = str(config.get("range_type") or "BarSetRange@tv-basicstudies-72!")
@@ -244,6 +248,7 @@ class TvFastpassSource(DataSource):
                         n_bars=int(n_bars),
                         timeout_sec=int(self.timeout_sec),
                         page_step=int(self.page_step),
+                        ws_proxy=(self.ws_proxy or None),
                     )
                 )
             except Exception as e:

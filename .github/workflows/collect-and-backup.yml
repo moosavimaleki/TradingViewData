@@ -17,12 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      # Prefer GitHub Secrets for proxy URL (contains credentials).
-      HTTPS_PROXY: ${{ secrets.HTTPS_PROXY }}
-      HTTP_PROXY: ${{ secrets.HTTP_PROXY || secrets.HTTPS_PROXY }}
-      ALL_PROXY: ${{ secrets.ALL_PROXY }}
-      NO_PROXY: ${{ secrets.NO_PROXY || vars.NO_PROXY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -74,6 +68,9 @@ jobs:
       - name: Run collector
         id: collector
         env:
+          # Proxy only for Python websocket layer (not whole job).
+          TV_WS_PROXY: ${{ secrets.TV_WS_PROXY || secrets.HTTPS_PROXY }}
+          TV_FASTPASS_WS_PROXY: ${{ secrets.TV_FASTPASS_WS_PROXY || secrets.TV_WS_PROXY || secrets.HTTPS_PROXY }}
           FARAZ_COOKIES: ${{ secrets.FARAZ_COOKIES }}
           TV_FASTPASS_COOKIE_STRING: ${{ secrets.TV_FASTPASS_COOKIE_STRING }}
           TV_FASTPASS_CHART_URL: ${{ secrets.TV_FASTPASS_CHART_URL }}
