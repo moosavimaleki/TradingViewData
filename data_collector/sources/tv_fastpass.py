@@ -62,6 +62,7 @@ class TvFastpassSource(DataSource):
             "TV_FASTPASS_WS_PROXY",
             os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")),
         ).strip()
+        self.ws_proxy_pool = self._parse_proxy_pool(self.ws_proxy)
 
         # Range-bar config (TV internal type).
         self.range_type = str(config.get("range_type") or "BarSetRange@tv-basicstudies-72!")
@@ -107,6 +108,31 @@ class TvFastpassSource(DataSource):
         self._auth_token: Optional[str] = None
         self._auth_token_expires_at: float = 0.0
         self._build_time: Optional[str] = None
+
+    @staticmethod
+    def _parse_proxy_pool(raw: str) -> List[str]:
+        if not raw:
+            return []
+        tokens = re.split(r"[\n,;]+", raw)
+        out: List[str] = []
+        seen = set()
+        for t in tokens:
+            val = t.strip()
+            if not val:
+                continue
+            if "://" not in val:
+                val = f"http://{val}"
+            if val in seen:
+                continue
+            seen.add(val)
+            out.append(val)
+        return out
+
+    def _proxy_for_attempt(self, attempt: int) -> Optional[str]:
+        if not self.ws_proxy_pool:
+            return None
+        idx = max(0, int(attempt) - 1) % len(self.ws_proxy_pool)
+        return self.ws_proxy_pool[idx]
 
     def _resolve_symbol_and_broker(self, symbol: str) -> Tuple[str, str]:
         """
@@ -233,6 +259,7 @@ class TvFastpassSource(DataSource):
         last_exc: Exception | None = None
         for attempt in range(1, max_attempts + 1):
             try:
+                ws_proxy = self._proxy_for_attempt(attempt)
                 return asyncio.run(
                     fetch_bars_ws(
                         chart_url=self.chart_url,
@@ -248,7 +275,7 @@ class TvFastpassSource(DataSource):
                         n_bars=int(n_bars),
                         timeout_sec=int(self.timeout_sec),
                         page_step=int(self.page_step),
-                        ws_proxy=(self.ws_proxy or None),
+                        ws_proxy=ws_proxy,
                     )
                 )
             except Exception as e:
@@ -258,9 +285,14 @@ class TvFastpassSource(DataSource):
                 # Exponential backoff with jitter.
                 sleep_s = min(120.0, base_sleep * (2 ** (attempt - 1)))
                 sleep_s = sleep_s + random.random() * 0.5 * sleep_s
+                ws_proxy = self._proxy_for_attempt(attempt)
+                proxy_hint = ""
+                if ws_proxy:
+                    safe_proxy = re.sub(r"://[^@]+@", "://***:***@", ws_proxy)
+                    proxy_hint = f" proxy={safe_proxy}"
                 logger.warning(
                     f"tv_fastpass WS fetch failed (attempt {attempt}/{max_attempts}): {e}. "
-                    f"sleeping {sleep_s:.1f}s before retry"
+                    f"sleeping {sleep_s:.1f}s before retry{proxy_hint}"
                 )
                 time.sleep(sleep_s)
 

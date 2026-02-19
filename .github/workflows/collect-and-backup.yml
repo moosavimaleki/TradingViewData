@@ -65,12 +65,29 @@ jobs:
           mkdir -p data
           python scripts/pull_drive_state.py --remote gdrive: --local-dir data --tail-chunks 2 --verbose
 
+      - name: Discover healthy websocket proxies
+        run: |
+          set -euo pipefail
+          python scripts/select_ws_proxies.py \
+            --count 10 \
+            --min-count 10 \
+            --timeout 8 \
+            --concurrency 64 \
+            --max-candidates 1000 \
+            --out-file .ws_proxies.txt
+
+          {
+            echo "TV_WS_PROXY<<EOF"
+            cat .ws_proxies.txt
+            echo "EOF"
+            echo "TV_FASTPASS_WS_PROXY<<EOF"
+            cat .ws_proxies.txt
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Run collector
         id: collector
         env:
-          # Proxy only for Python websocket layer (not whole job).
-          TV_WS_PROXY: ${{ secrets.TV_WS_PROXY || secrets.HTTPS_PROXY }}
-          TV_FASTPASS_WS_PROXY: ${{ secrets.TV_FASTPASS_WS_PROXY || secrets.TV_WS_PROXY || secrets.HTTPS_PROXY }}
           FARAZ_COOKIES: ${{ secrets.FARAZ_COOKIES }}
           TV_FASTPASS_COOKIE_STRING: ${{ secrets.TV_FASTPASS_COOKIE_STRING }}
           TV_FASTPASS_CHART_URL: ${{ secrets.TV_FASTPASS_CHART_URL }}

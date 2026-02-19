@@ -55,6 +55,10 @@ python -m data_collector.run --config config/collect_jobs.json
 
 Workflow اصلی:
 - `.github/workflows/collect-and-backup.yml`
+  - در هر اجرا از `proxifly/free-proxy-list` لیست پروکسی می‌گیرد،
+  - پروکسی‌ها را با تست واقعی WebSocket به TradingView صحت‌سنجی می‌کند،
+  - ۱۰ پروکسی سالم را در `TV_WS_PROXY` (multi-line pool) ست می‌کند.
+  - اگر کمتر از ۱۰ پروکسی سالم پیدا شود، job fail می‌شود (تا با تنظیمات نیمه‌خراب جلو نرود).
 
 Workflow تست دیده‌شدن:
 - `.github/workflows/ping.yml`
@@ -74,6 +78,9 @@ Workflow تست دیده‌شدن:
 - `TV_AUTH_TOKEN`
 
 اختیاری (برای WebSocket پایتون، فقط در مرحله Run collector):
-- `TV_WS_PROXY`
-- `TV_FASTPASS_WS_PROXY`
-- `HTTPS_PROXY` (فقط به‌عنوان fallback اگر `TV_WS_PROXY` ست نشده باشد)
+- `TV_WS_PROXY` (می‌تواند یک proxy یا pool چندخطی/Comma-separated باشد)
+- `TV_FASTPASS_WS_PROXY` (می‌تواند یک proxy یا pool چندخطی/Comma-separated باشد)
+
+نکته:
+- اسکریپت `scripts/select_ws_proxies.py` پروتکل‌های `http/https/socks4/socks5` را تست و پشتیبانی می‌کند.
+- در کد، برای retry ها بین proxy های pool چرخش انجام می‌شود.

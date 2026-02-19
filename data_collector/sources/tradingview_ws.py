@@ -38,6 +38,7 @@ class TradingViewWebSocketSource(DataSource):
         self.ws_url = os.getenv("TV_WS_URL", str(config.get("ws_url") or "")).strip()
         self.ws_origin = os.getenv("TV_WS_ORIGIN", str(config.get("ws_origin") or "")).strip()
         self.ws_proxy = os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")).strip()
+        self.ws_proxy_pool = self._parse_proxy_pool(self.ws_proxy)
 
         # Auth: guest token by default (no cookies / login required).
         self.auth_token = os.getenv("TV_AUTH_TOKEN", str(config.get("auth_token") or "unauthorized_user_token")).strip()
@@ -85,6 +86,31 @@ class TradingViewWebSocketSource(DataSource):
         }
 
         self._known_brokers = set(ContractManager().standard_brokers.values())
+
+    @staticmethod
+    def _parse_proxy_pool(raw: str) -> List[str]:
+        if not raw:
+            return []
+        tokens = re.split(r"[\n,;]+", raw)
+        out: List[str] = []
+        seen = set()
+        for t in tokens:
+            val = t.strip()
+            if not val:
+                continue
+            if "://" not in val:
+                val = f"http://{val}"
+            if val in seen:
+                continue
+            seen.add(val)
+            out.append(val)
+        return out
+
+    def _proxy_for_attempt(self, attempt: int) -> Optional[str]:
+        if not self.ws_proxy_pool:
+            return None
+        idx = max(0, int(attempt) - 1) % len(self.ws_proxy_pool)
+        return self.ws_proxy_pool[idx]
 
     def _resolve_symbol_and_broker(self, symbol: str) -> Tuple[str, str]:
         """
@@ -149,6 +175,7 @@ class TradingViewWebSocketSource(DataSource):
 
         for attempt in range(1, max_attempts + 1):
             try:
+                ws_proxy = self._proxy_for_attempt(attempt)
                 return asyncio.run(
                     fetch_bars_ws(
                         chart_url=self.chart_url,
@@ -164,7 +191,7 @@ class TradingViewWebSocketSource(DataSource):
                         n_bars=int(n_bars),
                         timeout_sec=int(self.timeout_sec),
                         page_step=int(self.page_step),
-                        ws_proxy=(self.ws_proxy or None),
+                        ws_proxy=ws_proxy,
                     )
                 )
             except Exception as e:
@@ -174,9 +201,14 @@ class TradingViewWebSocketSource(DataSource):
                 backoff = min(90.0, float(self.retry_base_sleep_sec) * (2 ** (attempt - 1)))
                 jitter = random.random() * 0.5 * backoff
                 sleep_s = backoff + jitter
+                ws_proxy = self._proxy_for_attempt(attempt)
+                proxy_hint = ""
+                if ws_proxy:
+                    safe_proxy = re.sub(r"://[^@]+@", "://***:***@", ws_proxy)
+                    proxy_hint = f" proxy={safe_proxy}"
                 logger.warning(
                     f"tradingview fetch_latest retry {attempt}/{max_attempts} for {symbol} {timeframe}: {e}; "
-                    f"sleep={sleep_s:.1f}s"
+                    f"sleep={sleep_s:.1f}s{proxy_hint}"
                 )
                 time.sleep(sleep_s)
 
