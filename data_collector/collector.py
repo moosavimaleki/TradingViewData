@@ -148,6 +148,127 @@ class DataCollector:
         }
         
         return overlap_map.get(timeframe, timedelta(hours=1))  # پیش‌فرض 1 ساعت
+
+    @staticmethod
+    def _ensure_utc_datetime(dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
+    def _timeframe_seconds(self, timeframe: str) -> Optional[int]:
+        tf = str(timeframe).strip()
+        if re.fullmatch(r"[0-9]+[rR]", tf):
+            return None
+        if re.fullmatch(r"[0-9]+[sS]", tf):
+            return int(tf[:-1])
+        m = re.fullmatch(r"([0-9]+)[mM]", tf)
+        if m:
+            return int(m.group(1)) * 60
+        m = re.fullmatch(r"([0-9]+)[hH]", tf)
+        if m:
+            return int(m.group(1)) * 3600
+        m = re.fullmatch(r"([0-9]+)[dD]", tf)
+        if m:
+            return int(m.group(1)) * 86400
+        m = re.fullmatch(r"([0-9]+)[wW]", tf)
+        if m:
+            return int(m.group(1)) * 7 * 86400
+        if tf in ("1d", "1D", "D"):
+            return 86400
+        if tf in ("1w", "1W", "W"):
+            return 7 * 86400
+        if tf in ("1M", "M"):
+            return 30 * 86400
+        return None
+
+    def _fetch_data_with_backfill_windows(
+        self,
+        source_name: str,
+        source: DataSource,
+        symbol: str,
+        start_date: datetime,
+        end_date: datetime,
+        timeframe: str,
+    ) -> pd.DataFrame:
+        """
+        Robust fetch for delayed runs.
+        For TradingView time-bars, fetches in bounded windows so max_fetch_bars caps
+        don't silently skip older missing intervals.
+        """
+        if source_name not in TV_MIRROR_SOURCES:
+            return source.fetch_data(symbol=symbol, start_date=start_date, end_date=end_date, timeframe=timeframe)
+
+        tf_raw = str(timeframe).strip()
+        if re.fullmatch(r"[0-9]+[rR]", tf_raw):
+            # Range bars are handled via source-specific latest-bar logic.
+            return source.fetch_data(symbol=symbol, start_date=start_date, end_date=end_date, timeframe=timeframe)
+
+        seconds_per_bar = self._timeframe_seconds(tf_raw)
+        if not seconds_per_bar:
+            return source.fetch_data(symbol=symbol, start_date=start_date, end_date=end_date, timeframe=timeframe)
+
+        max_fetch_bars = int(
+            getattr(source, "max_fetch_bars", 0)
+            or self.settings.get(f"sources.{source_name}.max_fetch_bars", 12000)
+            or 12000
+        )
+        if max_fetch_bars <= 0:
+            max_fetch_bars = 12000
+
+        start_utc = self._ensure_utc_datetime(start_date)
+        end_utc = self._ensure_utc_datetime(end_date)
+        total_seconds = max(0.0, (end_utc - start_utc).total_seconds())
+
+        conservative_bars = max(200, int(max_fetch_bars * 0.85))
+        window_seconds = max(seconds_per_bar, conservative_bars * seconds_per_bar)
+        if total_seconds <= window_seconds:
+            return source.fetch_data(symbol=symbol, start_date=start_utc, end_date=end_utc, timeframe=timeframe)
+
+        overlap_seconds = int(self._calculate_overlap_buffer(tf_raw).total_seconds())
+        overlap_seconds = max(seconds_per_bar, overlap_seconds)
+        overlap_seconds = min(overlap_seconds, max(seconds_per_bar, window_seconds // 5))
+
+        frames: List[pd.DataFrame] = []
+        cursor_start = start_utc
+        max_windows = 5000
+        window_count = 0
+
+        while cursor_start < end_utc and window_count < max_windows:
+            cursor_end = min(end_utc, cursor_start + timedelta(seconds=window_seconds))
+            part = source.fetch_data(
+                symbol=symbol,
+                start_date=cursor_start,
+                end_date=cursor_end,
+                timeframe=timeframe,
+            )
+            if not part.empty:
+                frames.append(part)
+
+            next_start = cursor_end - timedelta(seconds=overlap_seconds)
+            if next_start <= cursor_start:
+                next_start = cursor_start + timedelta(seconds=seconds_per_bar)
+            cursor_start = next_start
+            window_count += 1
+
+        if window_count >= max_windows:
+            logger.warning(
+                f"Backfill windows hit safety limit for {symbol} {timeframe} from {source_name}; "
+                f"windows={window_count}"
+            )
+
+        if not frames:
+            return pd.DataFrame()
+
+        merged = pd.concat(frames, ignore_index=True)
+        if "timestamp" not in merged.columns:
+            return pd.DataFrame()
+
+        merged["timestamp"] = pd.to_datetime(merged["timestamp"], utc=True, format="mixed", errors="coerce")
+        merged = merged.dropna(subset=["timestamp"])
+        merged = merged.sort_values("timestamp")
+        merged = merged.drop_duplicates(subset=["timestamp"], keep="last").reset_index(drop=True)
+        merged = merged[(merged["timestamp"] >= pd.Timestamp(start_utc)) & (merged["timestamp"] <= pd.Timestamp(end_utc))]
+        return merged.reset_index(drop=True)
     
     
     def collect(
@@ -297,11 +418,13 @@ class DataCollector:
 
                     
                     # دانلود ساده داده‌ها 
-                    data = source.fetch_data(
+                    data = self._fetch_data_with_backfill_windows(
+                        source_name=source_name,
+                        source=source,
                         symbol=symbol,
                         start_date=actual_start_date,
                         end_date=end_date,
-                        timeframe=timeframe
+                        timeframe=timeframe,
                     )
                     
                     if data.empty:

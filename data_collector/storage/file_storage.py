@@ -73,8 +73,14 @@ class FileStorage:
 
     def _write_manifest(self, storage_path: Path, manifest: Dict[str, Any]) -> None:
         manifest_path = self._manifest_path(storage_path)
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, ensure_ascii=False, indent=2)
+        tmp_path = manifest_path.with_name(manifest_path.name + ".tmp")
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(manifest, f, ensure_ascii=False, indent=2)
+            tmp_path.replace(manifest_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
 
     def _list_chunk_files(self, storage_path: Path, symbol: str) -> List[Path]:
         pattern = re.compile(rf"^{re.escape(symbol)}_(\d+){re.escape(self._chunk_extension())}$")
@@ -104,7 +110,13 @@ class FileStorage:
         out = df.copy()
         out["timestamp"] = out["timestamp"].apply(lambda x: pd.Timestamp(x).isoformat())
         compression = "gzip" if chunk_path.suffix == ".gz" else None
-        out.to_csv(chunk_path, index=False, compression=compression)
+        tmp_path = chunk_path.with_name(chunk_path.name + ".tmp")
+        try:
+            out.to_csv(tmp_path, index=False, compression=compression)
+            tmp_path.replace(chunk_path)
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink(missing_ok=True)
 
     def _normalize_df(self, df: Optional[pd.DataFrame]) -> pd.DataFrame:
         if df is None or df.empty:
@@ -181,6 +193,15 @@ class FileStorage:
         previous_chunks = list(manifest.get("chunks") or [])
 
         tail_entries = self._select_tail_entries(manifest, storage_path)
+        if previous_chunks:
+            required_tail = min(len(previous_chunks), int(self.merge_tail_chunks))
+            if len(tail_entries) < required_tail:
+                raise RuntimeError(
+                    f"Refusing write for {symbol} ({source}/{broker or 'default'}/{timeframe}): "
+                    f"manifest exists but local tail chunks are incomplete "
+                    f"(have={len(tail_entries)}, need={required_tail}). "
+                    "Pull latest tail chunks before writing."
+                )
         rewrite_from = int(tail_entries[0]["index"]) if tail_entries else 0
 
         tail_frames: List[pd.DataFrame] = []
