@@ -145,7 +145,7 @@ jobs:
           fi
 
           rclone copy ./data/tradingview "${RCLONE_REMOTE_PATH%/}/data/tradingview" \
-            --include "**/data.csv" \
+            --include "**/*.parquet" \
             --create-empty-src-dirs \
             -v
 
