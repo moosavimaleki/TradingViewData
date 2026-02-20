@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Iterable, List, Set, Tuple
+from typing import Any, Iterable, List, Set, Tuple
 
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
@@ -118,7 +119,7 @@ def _list_remote_year_files(
     attempts: int,
     delay_seconds: float,
     verbose: bool,
-) -> Set[str]:
+) -> Tuple[Set[str], str | None]:
     remote_tv_root = _remote_join(remote_data_root, "tradingview")
     cmd = [
         "rclone",
@@ -137,8 +138,7 @@ def _list_remote_year_files(
         verbose=verbose,
     )
     if rc != 0:
-        print(output, flush=True)
-        raise SystemExit("remote year parquet ls failed")
+        return set(), output
 
     files: Set[str] = set()
     for raw in output.splitlines():
@@ -146,7 +146,7 @@ def _list_remote_year_files(
         if not line:
             continue
         files.add(f"tradingview/{line}")
-    return files
+    return files, None
 
 
 def _copyto_with_retry(
@@ -167,6 +167,13 @@ def _copyto_with_retry(
     )
 
 
+def _write_json(path: Path | None, payload: Dict[str, Any]) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pull only current-year parquet files for enabled TradingView jobs.")
     parser.add_argument("--remote", required=True, help="rclone remote root, e.g. gdrive:market-data")
@@ -175,6 +182,7 @@ def main() -> None:
     parser.add_argument("--run-year", type=int, required=True, help="pinned run year (UTC)")
     parser.add_argument("--retries", type=int, default=3, help="retry attempts for ls/copy")
     parser.add_argument("--retry-delay", type=float, default=5.0, help="delay between retries (seconds)")
+    parser.add_argument("--out-json", default="", help="optional path to write detailed pull report json")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -184,26 +192,60 @@ def main() -> None:
     retries = max(1, int(args.retries))
     retry_delay = max(0.0, float(args.retry_delay))
     run_year = int(args.run_year)
+    out_json = Path(args.out_json).resolve() if str(args.out_json).strip() else None
 
     expected_targets = sorted(_iter_targets(config_path=config_path, run_year=run_year))
+    report: Dict[str, Any] = {
+        "status": "running",
+        "run_year": run_year,
+        "remote": str(args.remote),
+        "local_root": str(local_root),
+        "config": str(config_path),
+        "retries": retries,
+        "retry_delay": retry_delay,
+        "expected_count": len(expected_targets),
+        "expected_files": expected_targets,
+        "listed_count": 0,
+        "listed_files": [],
+        "pulled_count": 0,
+        "pulled_files": [],
+        "remote_absent_count": 0,
+        "remote_absent_files": [],
+        "copy_missing_count": 0,
+        "copy_missing_files": [],
+        "failed_count": 0,
+        "failed_files": [],
+        "ls_error": None,
+    }
 
-    remote_files = _list_remote_year_files(
+    remote_files, ls_error = _list_remote_year_files(
         remote_data_root=args.remote,
         run_year=run_year,
         attempts=retries,
         delay_seconds=retry_delay,
         verbose=args.verbose,
     )
+    if ls_error is not None:
+        report["status"] = "ls_failed"
+        report["ls_error"] = ls_error
+        _write_json(out_json, report)
+        print(ls_error, flush=True)
+        print(
+            (
+                f"year_parquet_pull_summary run_year={run_year} expected={len(expected_targets)} "
+                f"listed=0 pulled=0 remote_absent=0 copy_missing=0 failed=0 retries={retries}"
+            ),
+            flush=True,
+        )
+        raise SystemExit("remote year parquet ls failed")
 
-    listed = len(remote_files)
-    remote_absent = 0
-    copy_missing = 0
-    pulled = 0
-    failed = 0
+    listed_files = sorted(remote_files)
+    report["listed_count"] = len(listed_files)
+    report["listed_files"] = listed_files
 
     if args.verbose:
         print(
-            f"remote_year_listing run_year={run_year} listed={listed} expected={len(expected_targets)}",
+            f"remote_year_listing run_year={run_year} listed={len(listed_files)} expected={len(expected_targets)}",
             flush=True,
         )
 
@@ -212,9 +254,14 @@ def main() -> None:
     if missing_targets:
         for rel in missing_targets:
             print(f"new_or_absent_on_remote: {rel}", flush=True)
-        remote_absent += len(missing_targets)
+    report["remote_absent_count"] = len(missing_targets)
+    report["remote_absent_files"] = missing_targets
 
-    for rel in sorted(remote_files):
+    pulled_files: List[str] = []
+    copy_missing_files: List[str] = []
+    failed_files: List[Dict[str, Any]] = []
+
+    for rel in listed_files:
         remote_file = _remote_join(args.remote, rel)
         local_file = local_root / rel
         local_file.parent.mkdir(parents=True, exist_ok=True)
@@ -226,38 +273,53 @@ def main() -> None:
             delay_seconds=retry_delay,
             verbose=args.verbose,
         )
-        if rc == 0:
-            if local_file.exists():
-                pulled += 1
-                if args.verbose:
-                    print(f"pulled: {rel}", flush=True)
-                continue
+        if rc == 0 and local_file.exists():
+            pulled_files.append(rel)
+            if args.verbose:
+                print(f"pulled: {rel}", flush=True)
+            continue
+
+        if rc == 0 and not local_file.exists():
             output = f"{output}\ncopy succeeded but local file missing: {local_file}"
 
         if _looks_missing(output):
-            copy_missing += 1
+            copy_missing_files.append(rel)
             print(f"missing_after_copy: {rel}", flush=True)
             continue
 
-        failed += 1
+        failed_files.append({"file": rel, "error": output.strip()})
         print(f"error pulling {rel}:\n{output}", flush=True)
+
+    report["pulled_count"] = len(pulled_files)
+    report["pulled_files"] = pulled_files
+    report["copy_missing_count"] = len(copy_missing_files)
+    report["copy_missing_files"] = copy_missing_files
+    report["failed_count"] = len(failed_files)
+    report["failed_files"] = failed_files
 
     print(
         (
             f"year_parquet_pull_summary run_year={run_year} expected={len(expected_targets)} "
-            f"listed={listed} pulled={pulled} remote_absent={remote_absent} "
-            f"copy_missing={copy_missing} failed={failed} retries={retries}"
+            f"listed={len(listed_files)} pulled={len(pulled_files)} remote_absent={len(missing_targets)} "
+            f"copy_missing={len(copy_missing_files)} failed={len(failed_files)} retries={retries}"
         ),
         flush=True,
     )
 
-    if listed > 0 and pulled != listed:
+    if len(listed_files) > 0 and len(pulled_files) != len(listed_files):
+        report["status"] = "copy_incomplete"
+        _write_json(out_json, report)
         raise SystemExit(
-            f"strict pull failed: listed={listed} but pulled={pulled}. refusing to start collector."
+            f"strict pull failed: listed={len(listed_files)} but pulled={len(pulled_files)}. refusing to start collector."
         )
 
-    if copy_missing > 0 or failed > 0:
+    if len(copy_missing_files) > 0 or len(failed_files) > 0:
+        report["status"] = "copy_failed"
+        _write_json(out_json, report)
         raise SystemExit(1)
+
+    report["status"] = "ok"
+    _write_json(out_json, report)
 
 
 if __name__ == "__main__":

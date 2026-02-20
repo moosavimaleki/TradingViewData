@@ -45,7 +45,11 @@ jobs:
         run: |
           set -euo pipefail
           YEAR="$(date -u +%Y)"
+          RUN_DATE_UTC="$(date -u +%F)"
+          RUN_TS_UTC="$(date -u +%FT%TZ)"
           echo "RUN_YEAR=$YEAR" >> "$GITHUB_ENV"
+          echo "RUN_DATE_UTC=$RUN_DATE_UTC" >> "$GITHUB_ENV"
+          echo "RUN_TS_UTC=$RUN_TS_UTC" >> "$GITHUB_ENV"
           echo "Pinned RUN_YEAR=$YEAR"
 
       - uses: actions/setup-python@v5
@@ -118,6 +122,23 @@ jobs:
           set -euo pipefail
           if [ "${RCLONE_ENABLED:-0}" != "1" ]; then
             echo "rclone not configured. Skipping pull."
+            cat > tvdatafeed_pull.json <<EOF
+            {
+              "status": "skipped",
+              "reason": "rclone not configured",
+              "run_year": ${RUN_YEAR},
+              "expected_count": 0,
+              "listed_count": 0,
+              "pulled_count": 0,
+              "remote_absent_count": 0,
+              "copy_missing_count": 0,
+              "failed_count": 0,
+              "pulled_files": [],
+              "remote_absent_files": [],
+              "copy_missing_files": [],
+              "failed_files": []
+            }
+            EOF
             exit 0
           fi
 
@@ -132,6 +153,7 @@ jobs:
             --run-year "$RUN_YEAR" \
             --retries 5 \
             --retry-delay 6 \
+            --out-json tvdatafeed_pull.json \
             --verbose
 
       - name: Run simple tvdatafeed collector
@@ -162,10 +184,18 @@ jobs:
             echo '{"ok":[],"skipped":[],"failed":[{"error":"summary file missing"}]}' > tvdatafeed_summary.json
           fi
 
+          if [ ! -f tvdatafeed_pull.json ]; then
+            echo '{"status":"missing","reason":"pull report file missing","expected_count":0,"listed_count":0,"pulled_count":0,"remote_absent_count":0,"copy_missing_count":0,"failed_count":0,"pulled_files":[],"remote_absent_files":[],"copy_missing_files":[],"failed_files":[]}' > tvdatafeed_pull.json
+          fi
+
           python scripts/build_tv_report.py \
             --summary tvdatafeed_summary.json \
-            --out-json tvdatafeed_report.json \
-            --out-md tvdatafeed_report.md
+            --pull-json tvdatafeed_pull.json \
+            --out-md tvdatafeed_report.md \
+            --run-year "$RUN_YEAR" \
+            --run-date "$RUN_DATE_UTC" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-at-utc "$RUN_TS_UTC"
 
           echo "===== tvdatafeed_report.md ====="
           sed -n '1,220p' tvdatafeed_report.md
@@ -191,36 +221,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          ARTIFACT_DIR="artifacts/tvdatafeed"
-          mkdir -p "$ARTIFACT_DIR"
-
-          cp -f tvdatafeed_summary.json "$ARTIFACT_DIR/summary.json"
-          cp -f tvdatafeed_report.json "$ARTIFACT_DIR/report.json"
-          cp -f tvdatafeed_report.md "$ARTIFACT_DIR/report.md"
-
-          cat > "$ARTIFACT_DIR/meta.json" <<EOF
-          {
-            "run_year": ${RUN_YEAR},
-            "run_id": "${GITHUB_RUN_ID}",
-            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
-            "generated_at_utc": "$(date -u +%FT%TZ)"
-          }
-          EOF
+          REPORT_DIR="artifacts/tvdatafeed"
+          REPORT_FILE="$REPORT_DIR/${RUN_DATE_UTC}.md"
+          mkdir -p "$REPORT_DIR"
+          cp -f tvdatafeed_report.md "$REPORT_FILE"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add "$ARTIFACT_DIR/summary.json" \
-                  "$ARTIFACT_DIR/report.json" \
-                  "$ARTIFACT_DIR/report.md" \
-                  "$ARTIFACT_DIR/meta.json"
+          git add "$REPORT_FILE"
 
           if git diff --cached --quiet; then
             echo "No artifact changes to commit."
             exit 0
           fi
 
-          git commit -m "chore: update tvdatafeed artifacts (run ${GITHUB_RUN_ID})"
+          git commit -m "chore: update tvdatafeed report ${RUN_DATE_UTC} (run ${GITHUB_RUN_ID})"
           BRANCH="${GITHUB_REF_NAME}"
           for i in 1 2 3; do
             if git pull --rebase origin "$BRANCH" && git push origin "HEAD:${BRANCH}"; then
@@ -237,9 +253,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tvdatafeed-summary
+          name: tvdatafeed-report-${{ env.RUN_DATE_UTC }}
           path: |
-            tvdatafeed_summary.json
-            tvdatafeed_report.json
             tvdatafeed_report.md
           if-no-files-found: ignore
