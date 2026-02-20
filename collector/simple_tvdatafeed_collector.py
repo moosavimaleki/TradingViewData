@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
+import os
+import re
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
@@ -19,6 +23,16 @@ except ImportError as exc:  # pragma: no cover
         "Install it with:\n"
         "pip install --upgrade --no-cache-dir git+https://github.com/rongardF/tvdatafeed.git"
     ) from exc
+
+# Allow running as `python collector/simple_tvdatafeed_collector.py`.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from data_collector.sources.tradingview_ws import TradingViewWebSocketSource
+
+
+logger = logging.getLogger("collector.simple_tvdatafeed")
 
 
 @dataclass
@@ -62,6 +76,12 @@ TIMEFRAME_SECONDS: Dict[str, int] = {
     "1M": 2592000,
 }
 
+RANGE_TF_RE = re.compile(r"^[0-9]+[rR]$")
+
+
+def _is_range_timeframe(tf: str) -> bool:
+    return bool(RANGE_TF_RE.fullmatch(str(tf).strip()))
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -93,6 +113,8 @@ def _normalize_tf(raw: str) -> str:
         return "1d"
     if tf in {"1W", "W"}:
         return "1w"
+    if _is_range_timeframe(tf):
+        return tf.upper()
     return tf
 
 
@@ -153,6 +175,8 @@ def _normalize_tv_df(df: pd.DataFrame) -> pd.DataFrame:
 
     out["timestamp"] = pd.to_datetime(out["timestamp"], utc=True, errors="coerce")
     keep = ["timestamp", "open", "high", "low", "close", "volume"]
+    if "bar_index" in out.columns:
+        keep.append("bar_index")
     for col in keep:
         if col not in out.columns:
             out[col] = pd.NA
@@ -188,6 +212,57 @@ def _compute_n_bars(
     return max(1, min(int(n_bars), int(max_bars)))
 
 
+def _range_cutoff_timestamp(existing_df: pd.DataFrame, overlap_bars: int) -> Optional[pd.Timestamp]:
+    if existing_df.empty or "timestamp" not in existing_df.columns:
+        return None
+    work = existing_df.copy()
+    work["timestamp"] = pd.to_datetime(work["timestamp"], utc=True, errors="coerce")
+    work = work.dropna(subset=["timestamp"]).sort_values("timestamp")
+    if work.empty:
+        return None
+    tail = work.tail(max(1, int(overlap_bars)))
+    return pd.Timestamp(tail["timestamp"].iloc[0])
+
+
+def _fetch_range_bars(
+    *,
+    ws_source: TradingViewWebSocketSource,
+    contract_symbol: str,
+    timeframe: str,
+    existing_df: pd.DataFrame,
+    overlap_bars: int,
+    initial_bars: int,
+    max_bars: int,
+) -> tuple[pd.DataFrame, Dict[str, Any]]:
+    cutoff_ts = _range_cutoff_timestamp(existing_df, overlap_bars)
+    n_bars = max(1, min(int(initial_bars), int(max_bars)))
+    fetched = pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume", "bar_index"])
+
+    for _ in range(10):
+        raw = ws_source.fetch_latest(symbol=contract_symbol, timeframe=timeframe, n_bars=int(n_bars))
+        fetched = _normalize_tv_df(raw)
+        if fetched.empty or cutoff_ts is None:
+            break
+        earliest = pd.Timestamp(fetched["timestamp"].min())
+        if earliest <= cutoff_ts or n_bars >= int(max_bars):
+            break
+        n_bars = min(int(max_bars), int(n_bars) * 2)
+
+    if cutoff_ts is not None and not fetched.empty:
+        fetched = fetched[fetched["timestamp"] >= cutoff_ts].copy()
+
+    fetched = fetched.sort_values("timestamp").reset_index(drop=True)
+    if not fetched.empty:
+        # The latest range bar is usually still forming.
+        fetched = fetched.iloc[:-1].reset_index(drop=True)
+
+    diag = {
+        "cutoff_ts": cutoff_ts.isoformat() if cutoff_ts is not None else None,
+        "fetched_n_bars": int(n_bars),
+    }
+    return fetched, diag
+
+
 def _merge_and_save(path: Path, old_df: pd.DataFrame, new_df: pd.DataFrame) -> tuple[int, int]:
     merged = pd.concat([old_df, new_df], ignore_index=True)
     merged = merged.dropna(subset=["timestamp"])
@@ -199,6 +274,14 @@ def _merge_and_save(path: Path, old_df: pd.DataFrame, new_df: pd.DataFrame) -> t
     return len(old_df), len(merged)
 
 
+def _setup_logging(level_name: str) -> None:
+    level = getattr(logging, str(level_name).strip().upper(), logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Simple incremental collector using tvdatafeed (no proxy).")
     p.add_argument("--config", default="config/collect_jobs.json")
@@ -206,16 +289,33 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--overlap-bars", type=int, default=30)
     p.add_argument("--initial-bars", type=int, default=5000)
     p.add_argument("--max-bars", type=int, default=5000)
+    p.add_argument("--range-overlap-bars", type=int, default=300)
+    p.add_argument("--range-initial-bars", type=int, default=2000)
+    p.add_argument("--range-max-bars", type=int, default=12000)
+    p.add_argument("--log-level", default=os.getenv("TV_SIMPLE_COLLECTOR_LOG_LEVEL", "INFO"))
     return p.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
+    _setup_logging(args.log_level)
     config_path = Path(args.config).resolve()
     data_root = Path(args.data_root).resolve()
 
     jobs = _load_jobs(config_path)
     tv = TvDatafeed()  # no login, no proxy
+    ws_source = TradingViewWebSocketSource(
+        config={
+            "ws_proxy": "",
+            "ws_direct_first": True,
+            "ws_direct_fallback": True,
+            "max_proxy_attempts": 0,
+        }
+    )
+    # Force direct WS mode regardless of host env vars.
+    ws_source.ws_proxy = ""
+    ws_source.ws_proxy_pool = []
+    ws_source.max_proxy_attempts = 0
 
     summary = {"ok": [], "skipped": [], "failed": []}
 
@@ -227,7 +327,8 @@ def main() -> None:
             continue
 
         tf = _normalize_tf(job.timeframe)
-        if tf not in INTERVAL_MAP:
+        is_range = _is_range_timeframe(tf)
+        if not is_range and tf not in INTERVAL_MAP:
             summary["skipped"].append(
                 {"symbol": job.symbol, "timeframe": job.timeframe, "reason": "unsupported timeframe for tvdatafeed"}
             )
@@ -244,25 +345,60 @@ def main() -> None:
             )
 
             old_df = _read_existing(out_file)
-            n_bars = _compute_n_bars(
-                existing_df=old_df,
-                timeframe=tf,
-                overlap_bars=max(1, int(args.overlap_bars)),
-                initial_bars=max(1, int(args.initial_bars)),
-                max_bars=max(1, int(args.max_bars)),
+            logger.info(
+                "collect job symbol=%s:%s timeframe=%s existing_rows=%s mode=%s",
+                symbol,
+                exchange,
+                tf,
+                len(old_df),
+                "tradingview_ws" if is_range else "tvdatafeed",
             )
 
-            raw = tv.get_hist(
-                symbol=symbol,
-                exchange=exchange,
-                interval=INTERVAL_MAP[tf],
-                n_bars=n_bars,
-            )
-            new_df = _normalize_tv_df(raw)
+            if is_range:
+                contract_symbol = f"{symbol}:{exchange}"
+                new_df, range_diag = _fetch_range_bars(
+                    ws_source=ws_source,
+                    contract_symbol=contract_symbol,
+                    timeframe=tf,
+                    existing_df=old_df,
+                    overlap_bars=max(1, int(args.range_overlap_bars)),
+                    initial_bars=max(1, int(args.range_initial_bars)),
+                    max_bars=max(1, int(args.range_max_bars)),
+                )
+                logger.info(
+                    "range fetch symbol=%s timeframe=%s fetched_rows=%s fetched_n_bars=%s cutoff_ts=%s",
+                    contract_symbol,
+                    tf,
+                    len(new_df),
+                    range_diag["fetched_n_bars"],
+                    range_diag["cutoff_ts"],
+                )
+            else:
+                n_bars = _compute_n_bars(
+                    existing_df=old_df,
+                    timeframe=tf,
+                    overlap_bars=max(1, int(args.overlap_bars)),
+                    initial_bars=max(1, int(args.initial_bars)),
+                    max_bars=max(1, int(args.max_bars)),
+                )
+
+                raw = tv.get_hist(
+                    symbol=symbol,
+                    exchange=exchange,
+                    interval=INTERVAL_MAP[tf],
+                    n_bars=n_bars,
+                )
+                new_df = _normalize_tv_df(raw)
+                range_diag = {}
 
             if new_df.empty:
                 summary["skipped"].append(
-                    {"symbol": f"{symbol}:{exchange}", "timeframe": tf, "reason": "no data returned"}
+                    {
+                        "symbol": f"{symbol}:{exchange}",
+                        "timeframe": tf,
+                        "reason": "no stable data returned",
+                        **({"details": range_diag} if range_diag else {}),
+                    }
                 )
                 continue
 
@@ -271,9 +407,11 @@ def main() -> None:
                 {
                     "symbol": f"{symbol}:{exchange}",
                     "timeframe": tf,
+                    "mode": "tradingview_ws" if is_range else "tvdatafeed",
                     "fetched_rows": int(len(new_df)),
                     "rows_before": int(old_rows),
                     "rows_after": int(merged_rows),
+                    **({"details": range_diag} if range_diag else {}),
                     "file": str(out_file),
                 }
             )
