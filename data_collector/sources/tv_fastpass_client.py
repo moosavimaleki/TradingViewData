@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import pandas as pd
 import requests
 import websockets
+from websockets import exceptions as ws_exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,20 @@ def _redact_proxy(proxy: Optional[str]) -> str:
     if parsed.port:
         host = f"{host}:{parsed.port}"
     return f"{parsed.scheme}://{parsed.username}:***@{host}"
+
+
+def _ws_exc_brief(exc: Exception) -> str:
+    if isinstance(exc, ws_exceptions.ConnectionClosed):
+        code = getattr(exc, "code", None)
+        reason = getattr(exc, "reason", "")
+        return f"{type(exc).__name__}(code={code}, reason={reason!r})"
+    if isinstance(exc, ws_exceptions.InvalidStatus):
+        status = getattr(exc, "status_code", None)
+        response = getattr(exc, "response", None)
+        if status is None and response is not None:
+            status = getattr(response, "status_code", None) or getattr(response, "status", None)
+        return f"{type(exc).__name__}(status={status}, msg={exc})"
+    return f"{type(exc).__name__}({exc})"
 
 
 def _should_suppress_ws_loop_exception(context: Dict[str, object]) -> bool:
@@ -286,6 +301,12 @@ async def fetch_bars_ws(
     bars_by_index: Dict[int, list] = {}
     errors: List[str] = []
     start = time.time()
+    stage = "init"
+    heartbeat_count = 0
+    timescale_update_count = 0
+    range_du_update_count = 0
+    critical_error_count = 0
+    last_payload_sample = ""
 
     interval_raw = str(interval).strip()
     range_match = re.fullmatch(r"([0-9]+)[rR]", interval_raw)
@@ -304,6 +325,19 @@ async def fetch_bars_ws(
     debug_payload_seen = 0
     debug_last_status_log = time.monotonic()
 
+    def _diag_snapshot(reason: str, exc: Exception | None = None) -> str:
+        exc_text = _ws_exc_brief(exc) if exc is not None else ""
+        payload_sample = (last_payload_sample or "").replace("\n", "\\n")
+        if len(payload_sample) > 180:
+            payload_sample = payload_sample[:180]
+        return (
+            f"reason={reason} stage={stage} elapsed={time.time() - start:.1f}s "
+            f"bars={len(bars_by_index)} payloads={debug_payload_seen} heartbeats={heartbeat_count} "
+            f"timescale_updates={timescale_update_count} range_du_updates={range_du_update_count} "
+            f"critical_errors={critical_error_count} ws_url={ws_url_final} origin={ws_origin_final} "
+            f"proxy={_redact_proxy(ws_proxy)} exc={exc_text} last_payload={payload_sample!r}"
+        )
+
     def _maybe_log_status(reason: str) -> None:
         nonlocal debug_last_status_log
         if not debug_enabled:
@@ -317,15 +351,18 @@ async def fetch_bars_ws(
             debug_last_status_log = now
 
     async def handle_payload(ws, payload: str) -> None:
-        nonlocal debug_payload_seen
+        nonlocal debug_payload_seen, heartbeat_count, timescale_update_count
+        nonlocal range_du_update_count, critical_error_count, last_payload_sample
+        debug_payload_seen += 1
+        last_payload_sample = payload[:240]
         if debug_enabled:
-            debug_payload_seen += 1
             if debug_payload_seen <= 8 or debug_payload_seen % 50 == 0:
                 sample = payload[:180].replace("\n", "\\n")
                 _ws_debug(f"recv_payload#{debug_payload_seen} sample={sample}")
 
         if payload.startswith("~h~"):
             # TradingView-style heartbeat: echo back the framed heartbeat payload.
+            heartbeat_count += 1
             await ws.send(ws_frame(payload))
             _maybe_log_status("heartbeat_echo")
             return
@@ -336,6 +373,7 @@ async def fetch_bars_ws(
                 series = message["p"][1][series_id]["s"]
             except Exception:
                 return
+            timescale_update_count += 1
             for row in series:
                 bars_by_index[int(row["i"])] = row["v"]
             _maybe_log_status("timescale_update")
@@ -380,11 +418,13 @@ async def fetch_bars_ws(
                     t = float(existing[0]) if existing else float(close_time)
                     v2 = [t, v[1], v[2], v[3], v[4], v[5]]
                     bars_by_index[idx] = v2
+                range_du_update_count += 1
                 _maybe_log_status("range_du_update")
             except Exception:
                 return
 
         if "critical_error" in payload or "symbol_error" in payload:
+            critical_error_count += 1
             errors.append(payload[:400])
             if debug_enabled:
                 _ws_debug(f"error_payload sample={payload[:220]}")
@@ -395,6 +435,8 @@ async def fetch_bars_ws(
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=5)
             except Exception as e:
+                if isinstance(e, ws_exceptions.ConnectionClosed):
+                    raise RuntimeError(f"ws_diag={_diag_snapshot('recv_closed', e)}") from e
                 if debug_enabled:
                     _ws_debug(f"recv_wait error={type(e).__name__}: {e}")
                 continue
@@ -404,6 +446,7 @@ async def fetch_bars_ws(
                 await handle_payload(ws, payload)
 
     try:
+        stage = "connect"
         async with websockets.connect(
             ws_url_final,
             origin=ws_origin_final,
@@ -412,12 +455,19 @@ async def fetch_bars_ws(
             proxy=(ws_proxy or None),
             ping_interval=None,
             max_size=None,
+            open_timeout=max(8, int(timeout_sec)),
+            close_timeout=5,
         ) as ws:
+            stage = "connected"
             if debug_enabled:
                 _ws_debug("websocket_handshake_ok")
+            stage = "send_set_auth_token"
             await send_msg(ws, "set_auth_token", [auth_token])
+            stage = "send_chart_create_session"
             await send_msg(ws, "chart_create_session", [chart_session, ""])
+            stage = "send_quote_create_session"
             await send_msg(ws, "quote_create_session", [quote_session])
+            stage = "send_quote_set_fields"
             await send_msg(
                 ws,
                 "quote_set_fields",
@@ -456,11 +506,15 @@ async def fetch_bars_ws(
                 resolve_string = f'={{"symbol":"{symbol}","adjustment":"splits","session":"regular"}}'
                 create_interval = str(interval_raw)
 
+            stage = "send_resolve_symbol"
             await send_msg(ws, "resolve_symbol", [chart_session, resolved_symbol_id, resolve_string])
+            stage = "send_create_series"
             await send_msg(ws, "create_series", [chart_session, series_id, series_id, resolved_symbol_id, create_interval, initial_bars, ""])
+            stage = "send_switch_timezone"
             await send_msg(ws, "switch_timezone", [chart_session, "exchange"])
 
             # Consume initial batch.
+            stage = "recv_initial"
             await recv_for(ws, seconds=min(20, timeout_sec))
 
             # Backfill older bars in pages.
@@ -482,7 +536,9 @@ async def fetch_bars_ws(
                         break
                     if debug_enabled:
                         _ws_debug(f"request_more_data req={req} prev_count={prev_count}")
+                    stage = "send_request_more_data"
                     await send_msg(ws, "request_more_data", [chart_session, series_id, req])
+                    stage = "recv_backfill"
                     await recv_for(ws, seconds=18)
                     if len(bars_by_index) <= prev_count:
                         stagnant_rounds += 1
@@ -492,6 +548,11 @@ async def fetch_bars_ws(
                             break
                     else:
                         stagnant_rounds = 0
+            stage = "done"
+    except Exception as e:
+        if isinstance(e, RuntimeError) and "ws_diag=" in str(e):
+            raise
+        raise RuntimeError(f"ws_diag={_diag_snapshot('session_failed', e)}") from e
     finally:
         loop.set_exception_handler(prev_exc_handler)
 
@@ -499,7 +560,10 @@ async def fetch_bars_ws(
         error_text = errors[0] if errors else "No explicit error payload."
         if debug_enabled:
             _ws_debug(f"no_bars_received error_text={error_text}")
-        raise RuntimeError(f"No bars received from websocket. sample_error={error_text}")
+        raise RuntimeError(
+            f"No bars received from websocket. sample_error={error_text}; "
+            f"ws_diag={_diag_snapshot('no_bars')}"
+        )
 
     rows = []
     for idx in sorted(bars_by_index.keys()):

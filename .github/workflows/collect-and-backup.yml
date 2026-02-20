@@ -135,6 +135,7 @@ jobs:
         run: |
           set -euo pipefail
 
+          export TV_WS_DEBUG="${TV_WS_DEBUG:-1}"
           export TV_BACKFILL_MAX_EMPTY_WINDOWS="${TV_BACKFILL_MAX_EMPTY_WINDOWS:-3}"
           export TV_WS_TIMEOUT_SEC="${TV_WS_TIMEOUT_SEC:-60}"
           export TV_WS_PAGE_STEP="${TV_WS_PAGE_STEP:-1000}"
@@ -146,7 +147,9 @@ jobs:
           export TV_WS_MAX_PROXY_ATTEMPTS="${TV_WS_MAX_PROXY_ATTEMPTS:-4}"
           export TV_WS_DIRECT_FIRST="${TV_WS_DIRECT_FIRST:-1}"
 
-          python -m data_collector.run --config config/collect_jobs.json --fail-on-error | tee run_summary.json
+          python -m data_collector.run --config config/collect_jobs.json --fail-on-error \
+            2> >(tee collector_stderr.log >&2) \
+            | tee run_summary.json
 
       - name: Upload changed data to Drive
         if: always()
@@ -164,5 +167,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: run-summary
-          path: run_summary.json
+          path: |
+            run_summary.json
+            collector_stderr.log
           if-no-files-found: ignore

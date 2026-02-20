@@ -310,7 +310,9 @@ class TradingViewWebSocketSource(DataSource):
                     proxy_hint = f" proxy={safe_proxy}"
                 logger.warning(
                     f"tradingview fetch_latest retry {attempt}/{max_attempts} for {symbol} {timeframe}: {e}; "
-                    f"sleep={sleep_s:.1f}s{proxy_hint}"
+                    f"sleep={sleep_s:.1f}s{proxy_hint} "
+                    f"ws_url={self.ws_url or 'auto:data.tradingview.com/socket.io/websocket'} "
+                    f"ws_origin={self.ws_origin or 'auto:https://www.tradingview.com'}"
                 )
                 time.sleep(sleep_s)
 
