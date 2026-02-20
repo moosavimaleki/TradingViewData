@@ -34,10 +34,12 @@ jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Pin RUN_YEAR (UTC)
         run: |
@@ -45,10 +47,35 @@ jobs:
           YEAR="$(date -u +%Y)"
           RUN_DATE_UTC="$(date -u +%F)"
           RUN_TS_UTC="$(date -u +%FT%TZ)"
+          RUN_STAMP_UTC="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
           echo "RUN_YEAR=$YEAR" >> "$GITHUB_ENV"
           echo "RUN_DATE_UTC=$RUN_DATE_UTC" >> "$GITHUB_ENV"
           echo "RUN_TS_UTC=$RUN_TS_UTC" >> "$GITHUB_ENV"
+          echo "RUN_STAMP_UTC=$RUN_STAMP_UTC" >> "$GITHUB_ENV"
           echo "Pinned RUN_YEAR=$YEAR"
+
+      - name: Resolve run mode and effective config
+        run: |
+          set -euo pipefail
+          BASE_CONFIG_PATH="${{ github.event.inputs.config_path || 'config/collect_jobs.json' }}"
+          HOUR_UTC="$(date -u +%H)"
+
+          if [ $((10#$HOUR_UTC % 6)) -eq 0 ]; then
+            RUN_MODE="major"
+            EFFECTIVE_CONFIG_PATH="$BASE_CONFIG_PATH"
+            echo "mode=major (6h). all timeframes enabled."
+          else
+            RUN_MODE="minor"
+            EFFECTIVE_CONFIG_PATH="$(mktemp /tmp/collect_jobs_minor.XXXXXX.json)"
+            python -c 'import json,sys; src,dst=sys.argv[1:3]; keep={"10R","100R","1000R"}; d=json.load(open(src,encoding="utf-8")); jobs=d.get("jobs",[]); filtered=[j for j in jobs if str(j.get("source","")).strip().lower() in {"tradingview","tv"} and str(j.get("timeframe","")).strip().upper() in keep]; d["jobs"]=filtered; open(dst,"w",encoding="utf-8").write(json.dumps(d,ensure_ascii=False,indent=2)); print(f"mode=minor jobs={len(filtered)} output={dst}")' "$BASE_CONFIG_PATH" "$EFFECTIVE_CONFIG_PATH"
+            echo "mode=minor (3h). only 10R/100R/1000R will run."
+          fi
+
+          echo "BASE_CONFIG_PATH=$BASE_CONFIG_PATH" >> "$GITHUB_ENV"
+          echo "EFFECTIVE_CONFIG_PATH=$EFFECTIVE_CONFIG_PATH" >> "$GITHUB_ENV"
+          echo "RUN_MODE=$RUN_MODE" >> "$GITHUB_ENV"
+          echo "RUN_HOUR_UTC=$HOUR_UTC" >> "$GITHUB_ENV"
+          echo "Resolved RUN_MODE=$RUN_MODE RUN_HOUR_UTC=$HOUR_UTC config=$EFFECTIVE_CONFIG_PATH"
 
       - uses: actions/setup-python@v5
         with:
@@ -124,7 +151,7 @@ jobs:
             exit 0
           fi
 
-          CONFIG_PATH="${{ github.event.inputs.config_path || 'config/collect_jobs.json' }}"
+          CONFIG_PATH="${EFFECTIVE_CONFIG_PATH}"
           DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
 
           mkdir -p "$DATA_ROOT/tradingview"
@@ -144,7 +171,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          CONFIG_PATH="${{ github.event.inputs.config_path || 'config/collect_jobs.json' }}"
+          CONFIG_PATH="${EFFECTIVE_CONFIG_PATH}"
           DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
           OVERLAP_BARS="${{ github.event.inputs.overlap_bars || '30' }}"
           INITIAL_BARS="${{ github.event.inputs.initial_bars || '5000' }}"
@@ -159,7 +186,7 @@ jobs:
             | tee tvdatafeed_summary.json
 
       - name: Build detailed report artifacts
-        if: always()
+        if: always() && env.RUN_MODE == 'major'
         run: |
           set -euo pipefail
           if [ ! -f tvdatafeed_summary.json ]; then
@@ -202,11 +229,47 @@ jobs:
             --create-empty-src-dirs \
             -v
 
+      - name: Commit report artifacts to repository (major only)
+        if: always() && env.RUN_MODE == 'major'
+        run: |
+          set -euo pipefail
+          if [ ! -f tvdatafeed_report.md ]; then
+            echo "tvdatafeed_report.md not found. Skipping repo commit."
+            exit 0
+          fi
+
+          REPORT_DIR="artifacts/tvdatafeed"
+          REPORT_FILE="$REPORT_DIR/${RUN_STAMP_UTC}.md"
+          mkdir -p "$REPORT_DIR"
+          cp -f tvdatafeed_report.md "$REPORT_FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$REPORT_FILE"
+          if git diff --cached --quiet; then
+            echo "No artifact changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: add tvdatafeed report ${RUN_STAMP_UTC} (run ${GITHUB_RUN_ID})"
+          BRANCH="${GITHUB_REF_NAME}"
+          for i in 1 2 3; do
+            if git pull --rebase origin "$BRANCH" && git push origin "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "Failed to push artifact commit after retries."
+              exit 1
+            fi
+            sleep 3
+          done
+
       - name: Upload summary artifact
-        if: always()
+        if: always() && env.RUN_MODE == 'major'
         uses: actions/upload-artifact@v4
         with:
-          name: tvdatafeed-summary-${{ env.RUN_DATE_UTC }}
+          name: tvdatafeed-summary-${{ env.RUN_STAMP_UTC }}
           path: |
             tvdatafeed_summary.json
             tvdatafeed_pull.json
