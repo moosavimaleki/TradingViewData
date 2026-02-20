@@ -168,7 +168,8 @@ def main() -> None:
         verbose=args.verbose,
     )
 
-    missing = 0
+    remote_absent = 0
+    copy_missing = 0
     pulled = 0
     failed = 0
 
@@ -181,8 +182,8 @@ def main() -> None:
     missing_targets = sorted(expected_set - remote_files)
     if missing_targets:
         for rel in missing_targets:
-            print(f"missing_on_remote: {rel}", flush=True)
-        missing += len(missing_targets)
+            print(f"new_or_absent_on_remote: {rel}", flush=True)
+        remote_absent += len(missing_targets)
 
     for rel in expected_targets:
         if rel not in remote_files:
@@ -207,7 +208,7 @@ def main() -> None:
             output = f"{output}\ncopy succeeded but local file missing: {local_file}"
 
         if _looks_missing(output):
-            missing += 1
+            copy_missing += 1
             print(f"missing_after_copy: {rel}", flush=True)
             continue
 
@@ -217,12 +218,13 @@ def main() -> None:
     print(
         (
             f"year_parquet_pull_summary run_year={run_year} expected={len(expected_targets)} "
-            f"listed={len(remote_files)} pulled={pulled} missing={missing} failed={failed} retries={retries}"
+            f"listed={len(remote_files)} pulled={pulled} remote_absent={remote_absent} "
+            f"copy_missing={copy_missing} failed={failed} retries={retries}"
         ),
         flush=True,
     )
 
-    if missing > 0 or failed > 0:
+    if copy_missing > 0 or failed > 0:
         raise SystemExit(1)
 
 
