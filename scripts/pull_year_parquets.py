@@ -4,15 +4,24 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Iterable, List, Set, Tuple
+
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from collector.pipeline.config import load_jobs, normalize_timeframe, resolve_symbol_exchange
+
+
+class RcloneCommandError(RuntimeError):
+    def __init__(self, label: str, rc: int, output: str) -> None:
+        self.label = label
+        self.rc = rc
+        self.output = output
+        super().__init__(f"{label} failed rc={rc}")
 
 
 def _remote_join(remote_root: str, rel: str) -> str:
@@ -45,6 +54,20 @@ def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
     return proc.returncode, output
 
 
+def _on_retry_sleep(verbose: bool, label: str, attempts: int):
+    def _hook(retry_state) -> None:
+        if not verbose:
+            return
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        rc = getattr(exc, "rc", "unknown")
+        print(
+            f"[retry] {label} attempt={retry_state.attempt_number}/{attempts} failed rc={rc}",
+            flush=True,
+        )
+
+    return _hook
+
+
 def _run_with_retry(
     cmd: List[str],
     *,
@@ -53,19 +76,24 @@ def _run_with_retry(
     label: str,
     verbose: bool,
 ) -> Tuple[int, str]:
-    final_rc = 1
-    final_out = ""
-    for idx in range(1, attempts + 1):
+    @retry(
+        reraise=True,
+        stop=stop_after_attempt(attempts),
+        wait=wait_fixed(delay_seconds),
+        retry=retry_if_exception_type(RcloneCommandError),
+        before_sleep=_on_retry_sleep(verbose=verbose, label=label, attempts=attempts),
+    )
+    def _wrapped() -> str:
         rc, out = _run_cmd(cmd)
-        if rc == 0:
-            return rc, out
-        final_rc = rc
-        final_out = out
-        if verbose:
-            print(f"[retry] {label} attempt={idx}/{attempts} failed rc={rc}", flush=True)
-        if idx < attempts:
-            time.sleep(delay_seconds)
-    return final_rc, final_out
+        if rc != 0:
+            raise RcloneCommandError(label=label, rc=rc, output=out)
+        return out
+
+    try:
+        output = _wrapped()
+        return 0, output
+    except RcloneCommandError as exc:
+        return exc.rc, exc.output
 
 
 def _looks_missing(output: str) -> bool:
@@ -158,7 +186,6 @@ def main() -> None:
     run_year = int(args.run_year)
 
     expected_targets = sorted(_iter_targets(config_path=config_path, run_year=run_year))
-    expected_set = set(expected_targets)
 
     remote_files = _list_remote_year_files(
         remote_data_root=args.remote,
@@ -168,6 +195,7 @@ def main() -> None:
         verbose=args.verbose,
     )
 
+    listed = len(remote_files)
     remote_absent = 0
     copy_missing = 0
     pulled = 0
@@ -175,19 +203,18 @@ def main() -> None:
 
     if args.verbose:
         print(
-            f"remote_year_listing run_year={run_year} listed={len(remote_files)} expected={len(expected_targets)}",
+            f"remote_year_listing run_year={run_year} listed={listed} expected={len(expected_targets)}",
             flush=True,
         )
 
+    expected_set = set(expected_targets)
     missing_targets = sorted(expected_set - remote_files)
     if missing_targets:
         for rel in missing_targets:
             print(f"new_or_absent_on_remote: {rel}", flush=True)
         remote_absent += len(missing_targets)
 
-    for rel in expected_targets:
-        if rel not in remote_files:
-            continue
+    for rel in sorted(remote_files):
         remote_file = _remote_join(args.remote, rel)
         local_file = local_root / rel
         local_file.parent.mkdir(parents=True, exist_ok=True)
@@ -218,11 +245,16 @@ def main() -> None:
     print(
         (
             f"year_parquet_pull_summary run_year={run_year} expected={len(expected_targets)} "
-            f"listed={len(remote_files)} pulled={pulled} remote_absent={remote_absent} "
+            f"listed={listed} pulled={pulled} remote_absent={remote_absent} "
             f"copy_missing={copy_missing} failed={failed} retries={retries}"
         ),
         flush=True,
     )
+
+    if listed > 0 and pulled != listed:
+        raise SystemExit(
+            f"strict pull failed: listed={listed} but pulled={pulled}. refusing to start collector."
+        )
 
     if copy_missing > 0 or failed > 0:
         raise SystemExit(1)
