@@ -1,0 +1,154 @@
+name: Collect Market Data (tvdatafeed)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: "Path to jobs config"
+        required: true
+        default: "config/collect_jobs.json"
+      data_root:
+        description: "Output data root"
+        required: true
+        default: "data"
+      overlap_bars:
+        description: "Overlap bars for incremental update"
+        required: true
+        default: "30"
+      initial_bars:
+        description: "Bars to fetch on first run (no existing file)"
+        required: true
+        default: "5000"
+      max_bars:
+        description: "Maximum bars per symbol/timeframe request"
+        required: true
+        default: "5000"
+
+concurrency:
+  group: tvdatafeed-collector
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          for i in 1 2 3; do
+            if pip install -r requirements.txt; then
+              break
+            fi
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Install rclone (optional persistence)
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GDRIVE_SA_JSON:-}" ] && [ -n "${GDRIVE_FOLDER_ID:-}" ]; then
+            sudo apt-get update
+            sudo apt-get install -y rclone
+          else
+            echo "Google Drive secrets not set. Skipping rclone install."
+          fi
+
+      - name: Configure rclone (optional)
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
+            echo "Google Drive secrets not set. Skipping rclone config."
+            exit 0
+          fi
+
+          SA_PATH="$GITHUB_WORKSPACE/sa.json"
+          printf '%s' "$GDRIVE_SA_JSON" > "$SA_PATH"
+
+          mkdir -p ~/.config/rclone
+          printf "%s\n" \
+            "[gdrive]" \
+            "type = drive" \
+            "scope = drive" \
+            "service_account_file = $SA_PATH" \
+            "root_folder_id = ${GDRIVE_FOLDER_ID}" \
+            > ~/.config/rclone/rclone.conf
+
+      - name: Pull previous tvdatafeed files from Drive (optional)
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
+            echo "Google Drive secrets not set. Skipping pull."
+            exit 0
+          fi
+
+          mkdir -p data/tradingview
+          rclone copy gdrive:data/tradingview ./data/tradingview -v || true
+
+      - name: Run simple tvdatafeed collector
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          set -euo pipefail
+
+          CONFIG_PATH="${{ github.event.inputs.config_path || 'config/collect_jobs.json' }}"
+          DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
+          OVERLAP_BARS="${{ github.event.inputs.overlap_bars || '30' }}"
+          INITIAL_BARS="${{ github.event.inputs.initial_bars || '5000' }}"
+          MAX_BARS="${{ github.event.inputs.max_bars || '5000' }}"
+
+          python collector/simple_tvdatafeed_collector.py \
+            --config "$CONFIG_PATH" \
+            --data-root "$DATA_ROOT" \
+            --overlap-bars "$OVERLAP_BARS" \
+            --initial-bars "$INITIAL_BARS" \
+            --max-bars "$MAX_BARS" \
+            | tee tvdatafeed_summary.json
+
+      - name: Push updated tvdatafeed files to Drive (optional)
+        if: always()
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
+            echo "Google Drive secrets not set. Skipping push."
+            exit 0
+          fi
+
+          rclone copy ./data/tradingview gdrive:data/tradingview \
+            --include "**/data.csv" \
+            --create-empty-src-dirs \
+            -v
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvdatafeed-summary
+          path: tvdatafeed_summary.json
+          if-no-files-found: ignore

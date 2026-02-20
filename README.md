@@ -100,12 +100,13 @@ Workflow دیباگ شبکه/وب‌سوکت:
 - `TV_FASTPASS_CHART_URL`
 - `TV_FASTPASS_WS_URL`
 - `TV_FASTPASS_WS_ORIGIN`
-- `TV_AUTH_TOKEN`
+
+نکته:
+- برای سورس `tradingview` نیازی به تنظیم توکن نیست و پروژه به‌صورت داخلی از guest auth استفاده می‌کند.
 
 اختیاری (برای WebSocket پایتون، فقط در مرحله Run collector):
 - `TV_WS_PROXY` (می‌تواند یک proxy یا pool چندخطی/Comma-separated باشد)
 - `TV_FASTPASS_WS_PROXY` (می‌تواند یک proxy یا pool چندخطی/Comma-separated باشد)
 
-نکته:
 - اسکریپت `scripts/select_ws_proxies.py` پروتکل‌های `http/https/socks4/socks5` را تست و پشتیبانی می‌کند.
 - در کد، برای retry ها بین proxy های pool چرخش انجام می‌شود.
