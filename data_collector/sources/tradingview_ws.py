@@ -52,13 +52,21 @@ class TradingViewWebSocketSource(DataSource):
         self.phantom_bars = bool(config.get("phantom_bars") or False)
 
         # Fetch tuning.
-        self.timeout_sec = int(config.get("timeout_sec") or 60)
-        self.page_step = int(config.get("page_step") or 2000)
-        self.max_fetch_bars = int(config.get("max_fetch_bars") or 12000)
-        self.default_fetch_bars = int(config.get("default_fetch_bars") or 10000)
+        self.timeout_sec = int(os.getenv("TV_WS_TIMEOUT_SEC", str(config.get("timeout_sec") or 60)))
+        self.page_step = int(os.getenv("TV_WS_PAGE_STEP", str(config.get("page_step") or 2000)))
+        self.max_fetch_bars = int(os.getenv("TV_WS_MAX_FETCH_BARS", str(config.get("max_fetch_bars") or 12000)))
+        self.default_fetch_bars = int(
+            os.getenv("TV_WS_DEFAULT_FETCH_BARS", str(config.get("default_fetch_bars") or 10000))
+        )
         self.max_retries = int(config.get("max_retries") or os.getenv("TV_WS_RETRIES", "6"))
         self.retry_base_sleep_sec = float(
             config.get("retry_base_sleep_sec") or os.getenv("TV_WS_RETRY_BASE_SLEEP_SEC", "2")
+        )
+        self.retry_max_sleep_sec = float(
+            config.get("retry_max_sleep_sec") or os.getenv("TV_WS_RETRY_MAX_SLEEP_SEC", "20")
+        )
+        self.max_proxy_attempts = int(
+            config.get("max_proxy_attempts") or os.getenv("TV_WS_MAX_PROXY_ATTEMPTS", "0")
         )
 
         # Contract defaults for symbol-only input.
@@ -114,11 +122,19 @@ class TradingViewWebSocketSource(DataSource):
         return out
 
     def _proxy_for_attempt(self, attempt: int) -> Optional[str]:
-        plan = list(self.ws_proxy_pool)
-        if self.ws_direct_fallback or not plan:
-            plan.append(None)
+        plan = self._attempt_plan()
         idx = max(0, int(attempt) - 1) % len(plan)
         return plan[idx]
+
+    def _attempt_plan(self) -> List[Optional[str]]:
+        plan: List[Optional[str]] = list(self.ws_proxy_pool)
+        if self.ws_direct_fallback or not plan:
+            plan.append(None)
+        if self.max_proxy_attempts > 0:
+            plan = plan[: max(1, int(self.max_proxy_attempts))]
+        if not plan:
+            plan = [None]
+        return plan
 
     def _resolve_symbol_and_broker(self, symbol: str) -> Tuple[str, str]:
         """
@@ -178,7 +194,8 @@ class TradingViewWebSocketSource(DataSource):
     def fetch_latest(self, symbol: str, timeframe: str, *, n_bars: int) -> pd.DataFrame:
         tv_symbol, _, _ = self._to_tv_symbol(symbol)
         interval = self._to_tv_interval(timeframe)
-        planned_variants = len(self.ws_proxy_pool) + (1 if self.ws_direct_fallback or not self.ws_proxy_pool else 0)
+        attempt_plan = self._attempt_plan()
+        planned_variants = len(attempt_plan)
         max_attempts = max(1, int(self.max_retries), planned_variants)
         last_exc: Exception | None = None
         debug_enabled = self._ws_debug_enabled()
@@ -227,7 +244,10 @@ class TradingViewWebSocketSource(DataSource):
                     )
                 if attempt >= max_attempts or not self._is_retryable_ws_error(e):
                     raise
-                backoff = min(90.0, float(self.retry_base_sleep_sec) * (2 ** (attempt - 1)))
+                backoff = min(
+                    max(1.0, float(self.retry_max_sleep_sec)),
+                    float(self.retry_base_sleep_sec) * (2 ** (attempt - 1)),
+                )
                 jitter = random.random() * 0.5 * backoff
                 sleep_s = backoff + jitter
                 ws_proxy = self._proxy_for_attempt(attempt)

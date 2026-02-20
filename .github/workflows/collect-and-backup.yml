@@ -69,19 +69,35 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
           TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
+          TV_PROXY_SCAN_COUNT: ${{ vars.TV_PROXY_SCAN_COUNT }}
+          TV_PROXY_SCAN_MIN_COUNT: ${{ vars.TV_PROXY_SCAN_MIN_COUNT }}
+          TV_PROXY_SCAN_TIMEOUT: ${{ vars.TV_PROXY_SCAN_TIMEOUT }}
+          TV_PROXY_SCAN_CONCURRENCY: ${{ vars.TV_PROXY_SCAN_CONCURRENCY }}
+          TV_PROXY_SCAN_MAX_CANDIDATES: ${{ vars.TV_PROXY_SCAN_MAX_CANDIDATES }}
+          TV_PROXY_SCAN_MAX_RUNTIME: ${{ vars.TV_PROXY_SCAN_MAX_RUNTIME }}
+          TV_PROXY_TEST_MIN_BARS: ${{ vars.TV_PROXY_TEST_MIN_BARS }}
         run: |
           set -euo pipefail
+
+          SCAN_COUNT="${TV_PROXY_SCAN_COUNT:-10}"
+          SCAN_MIN_COUNT="${TV_PROXY_SCAN_MIN_COUNT:-3}"
+          SCAN_TIMEOUT="${TV_PROXY_SCAN_TIMEOUT:-12}"
+          SCAN_CONCURRENCY="${TV_PROXY_SCAN_CONCURRENCY:-64}"
+          SCAN_MAX_CANDIDATES="${TV_PROXY_SCAN_MAX_CANDIDATES:-1000}"
+          SCAN_MAX_RUNTIME="${TV_PROXY_SCAN_MAX_RUNTIME:-500}"
+          SCAN_MIN_BARS="${TV_PROXY_TEST_MIN_BARS:-8}"
+
           timeout 9m python scripts/select_ws_proxies.py \
-            --count 10 \
-            --min-count 3 \
-            --timeout 8 \
-            --concurrency 64 \
-            --max-candidates 1000 \
+            --count "$SCAN_COUNT" \
+            --min-count "$SCAN_MIN_COUNT" \
+            --timeout "$SCAN_TIMEOUT" \
+            --concurrency "$SCAN_CONCURRENCY" \
+            --max-candidates "$SCAN_MAX_CANDIDATES" \
             --progress-interval 5 \
-            --max-runtime 500 \
+            --max-runtime "$SCAN_MAX_RUNTIME" \
             --test-symbol BLACKBULL:XAUUSD \
             --test-interval 1 \
-            --test-min-bars 3 \
+            --test-min-bars "$SCAN_MIN_BARS" \
             --out-file .ws_proxies.txt
 
           echo "selected_proxy_count=$(wc -l < .ws_proxies.txt)"
@@ -107,6 +123,14 @@ jobs:
           TV_WS_DEBUG: ${{ vars.TV_WS_DEBUG }}
           DATA_COLLECTOR_LOG_LEVEL: ${{ vars.DATA_COLLECTOR_LOG_LEVEL }}
           TV_BACKFILL_MAX_EMPTY_WINDOWS: ${{ vars.TV_BACKFILL_MAX_EMPTY_WINDOWS }}
+          TV_WS_TIMEOUT_SEC: ${{ vars.TV_WS_TIMEOUT_SEC }}
+          TV_WS_PAGE_STEP: ${{ vars.TV_WS_PAGE_STEP }}
+          TV_WS_MAX_FETCH_BARS: ${{ vars.TV_WS_MAX_FETCH_BARS }}
+          TV_WS_DEFAULT_FETCH_BARS: ${{ vars.TV_WS_DEFAULT_FETCH_BARS }}
+          TV_WS_RETRIES: ${{ vars.TV_WS_RETRIES }}
+          TV_WS_RETRY_BASE_SLEEP_SEC: ${{ vars.TV_WS_RETRY_BASE_SLEEP_SEC }}
+          TV_WS_RETRY_MAX_SLEEP_SEC: ${{ vars.TV_WS_RETRY_MAX_SLEEP_SEC }}
+          TV_WS_MAX_PROXY_ATTEMPTS: ${{ vars.TV_WS_MAX_PROXY_ATTEMPTS }}
         run: |
           set -euo pipefail
           python -m data_collector.run --config config/collect_jobs.json --fail-on-error | tee run_summary.json

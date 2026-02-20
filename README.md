@@ -75,6 +75,18 @@ Workflow دیباگ شبکه/وب‌سوکت:
 - اگر Repository Variable `DATA_COLLECTOR_LOG_LEVEL=DEBUG` باشد، سطح لاگ عمومی پروژه روی DEBUG قرار می‌گیرد.
 - اگر Repository Variable `TV_BACKFILL_MAX_EMPTY_WINDOWS` تنظیم شود، تعداد پنجره‌های خالیِ پشت‌سرهم برای توقف زودهنگام backfill کنترل می‌شود (پیش‌فرض: `4`).
 
+تنظیمات پیشنهادی برای پایداری `collect` در GitHub Actions:
+- سخت‌گیرتر کردن تست پروکسی (Repository Variables):
+  - `TV_PROXY_SCAN_TIMEOUT` (پیش‌فرض: `12`)
+  - `TV_PROXY_TEST_MIN_BARS` (پیش‌فرض: `8`)
+  - `TV_PROXY_SCAN_COUNT` / `TV_PROXY_SCAN_MIN_COUNT`
+- کنترل حجم و retry های TradingView WS:
+  - `TV_WS_MAX_FETCH_BARS` (مثلاً `4000` تا `8000`)
+  - `TV_WS_DEFAULT_FETCH_BARS` (مثلاً `2000` تا `4000`)
+  - `TV_WS_RETRIES` (مثلاً `3` یا `4`)
+  - `TV_WS_RETRY_MAX_SLEEP_SEC` (مثلاً `15` یا `20`)
+  - `TV_WS_MAX_PROXY_ATTEMPTS` (مثلاً `4`)
+
 ## Secrets موردنیاز
 
 حداقل:
