@@ -25,6 +25,19 @@ TV_MIRROR_SOURCES = ("tv_fastpass", "tradingview")
 TV_CANONICAL_STORAGE_SOURCE = "tradingview"
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return int(default)
+    text = str(raw).strip()
+    if text == "":
+        return int(default)
+    try:
+        return int(text)
+    except Exception:
+        return int(default)
+
+
 class DataCollector:
     def __init__(self, settings: Optional[Settings] = None):
         self.settings = settings or Settings()
@@ -234,7 +247,7 @@ class DataCollector:
         overlap_seconds = min(overlap_seconds, max(seconds_per_bar, window_seconds // 5))
 
         ws_debug = str(os.getenv("TV_WS_DEBUG", "0")).strip().lower() in {"1", "true", "yes", "on"}
-        max_empty_windows = max(1, int(os.getenv("TV_BACKFILL_MAX_EMPTY_WINDOWS", "4")))
+        max_empty_windows = max(1, _env_int("TV_BACKFILL_MAX_EMPTY_WINDOWS", 4))
 
         frames: List[pd.DataFrame] = []
         cursor_start = start_utc

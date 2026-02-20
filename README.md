@@ -86,6 +86,7 @@ Workflow دیباگ شبکه/وب‌سوکت:
   - `TV_WS_RETRIES` (مثلاً `3` یا `4`)
   - `TV_WS_RETRY_MAX_SLEEP_SEC` (مثلاً `15` یا `20`)
   - `TV_WS_MAX_PROXY_ATTEMPTS` (مثلاً `4`)
+  - `TV_WS_DIRECT_FIRST=1` (ابتدا اتصال مستقیم را تست می‌کند، بعد پروکسی‌ها)
 
 ## Secrets موردنیاز
 

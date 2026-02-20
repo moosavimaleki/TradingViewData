@@ -131,8 +131,21 @@ jobs:
           TV_WS_RETRY_BASE_SLEEP_SEC: ${{ vars.TV_WS_RETRY_BASE_SLEEP_SEC }}
           TV_WS_RETRY_MAX_SLEEP_SEC: ${{ vars.TV_WS_RETRY_MAX_SLEEP_SEC }}
           TV_WS_MAX_PROXY_ATTEMPTS: ${{ vars.TV_WS_MAX_PROXY_ATTEMPTS }}
+          TV_WS_DIRECT_FIRST: ${{ vars.TV_WS_DIRECT_FIRST }}
         run: |
           set -euo pipefail
+
+          export TV_BACKFILL_MAX_EMPTY_WINDOWS="${TV_BACKFILL_MAX_EMPTY_WINDOWS:-3}"
+          export TV_WS_TIMEOUT_SEC="${TV_WS_TIMEOUT_SEC:-60}"
+          export TV_WS_PAGE_STEP="${TV_WS_PAGE_STEP:-1000}"
+          export TV_WS_MAX_FETCH_BARS="${TV_WS_MAX_FETCH_BARS:-6000}"
+          export TV_WS_DEFAULT_FETCH_BARS="${TV_WS_DEFAULT_FETCH_BARS:-3000}"
+          export TV_WS_RETRIES="${TV_WS_RETRIES:-4}"
+          export TV_WS_RETRY_BASE_SLEEP_SEC="${TV_WS_RETRY_BASE_SLEEP_SEC:-1.5}"
+          export TV_WS_RETRY_MAX_SLEEP_SEC="${TV_WS_RETRY_MAX_SLEEP_SEC:-15}"
+          export TV_WS_MAX_PROXY_ATTEMPTS="${TV_WS_MAX_PROXY_ATTEMPTS:-4}"
+          export TV_WS_DIRECT_FIRST="${TV_WS_DIRECT_FIRST:-1}"
+
           python -m data_collector.run --config config/collect_jobs.json --fail-on-error | tee run_summary.json
 
       - name: Upload changed data to Drive

@@ -20,6 +20,42 @@ from .tv_fastpass_client import fetch_bars_ws
 logger = logging.getLogger(__name__)
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return int(default)
+    text = str(raw).strip()
+    if text == "":
+        return int(default)
+    try:
+        return int(text)
+    except Exception:
+        return int(default)
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return float(default)
+    text = str(raw).strip()
+    if text == "":
+        return float(default)
+    try:
+        return float(text)
+    except Exception:
+        return float(default)
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return bool(default)
+    text = str(raw).strip().lower()
+    if text == "":
+        return bool(default)
+    return text in {"1", "true", "yes", "on"}
+
+
 class TradingViewWebSocketSource(DataSource):
     """
     Direct TradingView websocket source (wss://data.tradingview.com/socket.io/websocket).
@@ -39,9 +75,14 @@ class TradingViewWebSocketSource(DataSource):
         self.ws_origin = os.getenv("TV_WS_ORIGIN", str(config.get("ws_origin") or "")).strip()
         self.ws_proxy = os.getenv("TV_WS_PROXY", str(config.get("ws_proxy") or "")).strip()
         self.ws_proxy_pool = self._parse_proxy_pool(self.ws_proxy)
-        self.ws_direct_fallback = str(
-            os.getenv("TV_WS_DIRECT_FALLBACK", str(config.get("ws_direct_fallback", "1")))
-        ).strip().lower() in {"1", "true", "yes", "on"}
+        self.ws_direct_fallback = _env_bool(
+            "TV_WS_DIRECT_FALLBACK",
+            str(config.get("ws_direct_fallback", "1")).strip().lower() in {"1", "true", "yes", "on"},
+        )
+        self.ws_direct_first = _env_bool(
+            "TV_WS_DIRECT_FIRST",
+            str(config.get("ws_direct_first", "1")).strip().lower() in {"1", "true", "yes", "on"},
+        )
 
         # Auth: guest token by default (no cookies / login required).
         self.auth_token = os.getenv("TV_AUTH_TOKEN", str(config.get("auth_token") or "unauthorized_user_token")).strip()
@@ -52,21 +93,21 @@ class TradingViewWebSocketSource(DataSource):
         self.phantom_bars = bool(config.get("phantom_bars") or False)
 
         # Fetch tuning.
-        self.timeout_sec = int(os.getenv("TV_WS_TIMEOUT_SEC", str(config.get("timeout_sec") or 60)))
-        self.page_step = int(os.getenv("TV_WS_PAGE_STEP", str(config.get("page_step") or 2000)))
-        self.max_fetch_bars = int(os.getenv("TV_WS_MAX_FETCH_BARS", str(config.get("max_fetch_bars") or 12000)))
-        self.default_fetch_bars = int(
-            os.getenv("TV_WS_DEFAULT_FETCH_BARS", str(config.get("default_fetch_bars") or 10000))
+        self.timeout_sec = _env_int("TV_WS_TIMEOUT_SEC", int(config.get("timeout_sec") or 60))
+        self.page_step = _env_int("TV_WS_PAGE_STEP", int(config.get("page_step") or 2000))
+        self.max_fetch_bars = _env_int("TV_WS_MAX_FETCH_BARS", int(config.get("max_fetch_bars") or 12000))
+        self.default_fetch_bars = _env_int(
+            "TV_WS_DEFAULT_FETCH_BARS", int(config.get("default_fetch_bars") or 10000)
         )
-        self.max_retries = int(config.get("max_retries") or os.getenv("TV_WS_RETRIES", "6"))
-        self.retry_base_sleep_sec = float(
-            config.get("retry_base_sleep_sec") or os.getenv("TV_WS_RETRY_BASE_SLEEP_SEC", "2")
+        self.max_retries = _env_int("TV_WS_RETRIES", int(config.get("max_retries") or 6))
+        self.retry_base_sleep_sec = _env_float(
+            "TV_WS_RETRY_BASE_SLEEP_SEC", float(config.get("retry_base_sleep_sec") or 2.0)
         )
-        self.retry_max_sleep_sec = float(
-            config.get("retry_max_sleep_sec") or os.getenv("TV_WS_RETRY_MAX_SLEEP_SEC", "20")
+        self.retry_max_sleep_sec = _env_float(
+            "TV_WS_RETRY_MAX_SLEEP_SEC", float(config.get("retry_max_sleep_sec") or 20.0)
         )
-        self.max_proxy_attempts = int(
-            config.get("max_proxy_attempts") or os.getenv("TV_WS_MAX_PROXY_ATTEMPTS", "0")
+        self.max_proxy_attempts = _env_int(
+            "TV_WS_MAX_PROXY_ATTEMPTS", int(config.get("max_proxy_attempts") or 0)
         )
 
         # Contract defaults for symbol-only input.
@@ -127,11 +168,22 @@ class TradingViewWebSocketSource(DataSource):
         return plan[idx]
 
     def _attempt_plan(self) -> List[Optional[str]]:
-        plan: List[Optional[str]] = list(self.ws_proxy_pool)
-        if self.ws_direct_fallback or not plan:
-            plan.append(None)
+        proxies: List[Optional[str]] = list(self.ws_proxy_pool)
         if self.max_proxy_attempts > 0:
-            plan = plan[: max(1, int(self.max_proxy_attempts))]
+            proxies = proxies[: max(1, int(self.max_proxy_attempts))]
+
+        plan: List[Optional[str]] = []
+
+        # Prefer direct first so good GitHub runner egress doesn't wait behind flaky proxies.
+        if self.ws_direct_first and (self.ws_direct_fallback or not proxies):
+            plan.append(None)
+
+        plan.extend(proxies)
+
+        # Keep direct as fallback if enabled and not already present.
+        if (self.ws_direct_fallback or not proxies) and None not in plan:
+            plan.append(None)
+
         if not plan:
             plan = [None]
         return plan
@@ -205,7 +257,8 @@ class TradingViewWebSocketSource(DataSource):
                 "[ws-debug] tradingview fetch_latest start "
                 f"symbol={symbol} tv_symbol={tv_symbol} timeframe={timeframe} interval={interval} "
                 f"n_bars={int(n_bars)} attempts={max_attempts} proxies={len(self.ws_proxy_pool)} "
-                f"direct_fallback={self.ws_direct_fallback}"
+                f"direct_fallback={self.ws_direct_fallback} direct_first={self.ws_direct_first} "
+                f"max_proxy_attempts={self.max_proxy_attempts}"
             )
 
         for attempt in range(1, max_attempts + 1):
