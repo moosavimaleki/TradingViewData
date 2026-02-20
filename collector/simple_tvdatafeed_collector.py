@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
+import pandas as pd
+
 # Allow running as `python collector/simple_tvdatafeed_collector.py`.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -22,6 +24,29 @@ from collector.pipeline.storage import load_existing_parquet, merge_and_save_par
 from collector.pipeline.ws_fetcher import TradingViewWSFetcher
 
 logger = logging.getLogger("collector.simple_tvdatafeed")
+
+
+def _ms_to_iso(ms: int | None) -> str | None:
+    if ms is None:
+        return None
+    return datetime.fromtimestamp(int(ms) / 1000.0, tz=timezone.utc).isoformat()
+
+
+def _last_row(df) -> dict | None:
+    if df is None or df.empty:
+        return None
+    row = df.iloc[-1].to_dict()
+    out: dict = {}
+    for k, v in row.items():
+        if pd.isna(v):
+            out[k] = None
+        elif hasattr(v, "item"):
+            out[k] = v.item()
+        else:
+            out[k] = v
+    if "ts" in out and out["ts"] is not None:
+        out["ts_iso"] = _ms_to_iso(int(out["ts"]))
+    return out
 
 
 def _setup_logging(level_name: str) -> None:
@@ -93,7 +118,14 @@ def main() -> None:
 
     config_path = Path(args.config).resolve()
     data_root = Path(args.data_root).resolve()
-    run_year = datetime.now(timezone.utc).year
+    run_year_raw = str(os.getenv("RUN_YEAR", "")).strip()
+    if run_year_raw:
+        try:
+            run_year = int(run_year_raw)
+        except ValueError as exc:
+            raise SystemExit(f"Invalid RUN_YEAR={run_year_raw!r}. RUN_YEAR must be an integer year.") from exc
+    else:
+        run_year = datetime.now(timezone.utc).year
 
     jobs = load_jobs(config_path)
     tv_fetcher = TvDatafeedFetcher()
@@ -152,6 +184,7 @@ def main() -> None:
                     initial_bars=max(1, int(args.range_initial_bars)),
                     max_bars=max(1, int(args.range_max_bars)),
                 )
+                diag["configured_overlap_bars"] = int(max(1, int(args.range_overlap_bars)))
             else:
                 n_bars = compute_time_n_bars(
                     existing_df=old_df,
@@ -162,7 +195,10 @@ def main() -> None:
                 )
                 raw = tv_fetcher.fetch_latest(symbol=symbol, exchange=exchange, timeframe=tf, n_bars=n_bars)
                 new_df = normalize_frame(raw, drop_latest_candle=True)
-                diag = {"fetched_n_bars": int(n_bars)}
+                diag = {
+                    "fetched_n_bars": int(n_bars),
+                    "configured_overlap_bars": int(max(1, int(args.overlap_bars))),
+                }
 
             if new_df.empty:
                 summary["skipped"].append(
@@ -175,7 +211,23 @@ def main() -> None:
                 )
                 continue
 
-            rows_before, rows_after, deduped = merge_and_save_parquet(out_file, old_df, new_df)
+            old_last_ts = int(old_df["ts"].max()) if not old_df.empty else None
+            new_first_ts = int(new_df["ts"].min()) if not new_df.empty else None
+            new_last_ts = int(new_df["ts"].max()) if not new_df.empty else None
+            overlap_rows = 0
+            overlap_ms = 0
+            if new_first_ts is not None and not old_df.empty:
+                overlap_rows = int((old_df["ts"] >= new_first_ts).sum())
+            if old_last_ts is not None and new_first_ts is not None and old_last_ts >= new_first_ts:
+                overlap_ms = int(old_last_ts - new_first_ts)
+
+            merge_stats = merge_and_save_parquet(out_file, old_df, new_df)
+
+            after_last_ts = None
+            after_last_row = merge_stats.get("after_last_row")
+            if isinstance(after_last_row, dict) and after_last_row.get("ts") is not None:
+                after_last_ts = int(after_last_row["ts"])
+
             summary["ok"].append(
                 {
                     "symbol": f"{symbol}:{exchange}",
@@ -183,9 +235,22 @@ def main() -> None:
                     "mode": "tradingview_ws" if is_range else "tvdatafeed",
                     "run_year": int(run_year),
                     "fetched_rows": int(len(new_df)),
-                    "rows_before": int(rows_before),
-                    "rows_after": int(rows_after),
-                    "deduped": int(deduped),
+                    "rows_before": int(merge_stats["rows_before"]),
+                    "rows_after": int(merge_stats["rows_after"]),
+                    "deduped": int(merge_stats["deduped"]),
+                    "before_last_ts": old_last_ts,
+                    "before_last_ts_iso": _ms_to_iso(old_last_ts),
+                    "before_last_row": _last_row(old_df),
+                    "fetched_first_ts": new_first_ts,
+                    "fetched_first_ts_iso": _ms_to_iso(new_first_ts),
+                    "fetched_last_ts": new_last_ts,
+                    "fetched_last_ts_iso": _ms_to_iso(new_last_ts),
+                    "after_last_ts": after_last_ts,
+                    "after_last_ts_iso": _ms_to_iso(after_last_ts),
+                    "after_last_row": after_last_row,
+                    "overlap_rows": int(overlap_rows),
+                    "overlap_ms": int(overlap_ms),
+                    "overlap_minutes": round(overlap_ms / 60000.0, 3),
                     "details": diag,
                     "file": str(out_file),
                 }
@@ -202,4 +267,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

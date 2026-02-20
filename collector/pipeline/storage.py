@@ -36,7 +36,19 @@ def range_cutoff_ts(existing_df: pd.DataFrame, overlap_bars: int) -> Optional[in
     return int(tail["ts"].iloc[0])
 
 
-def merge_and_save_parquet(path: Path, old_df: pd.DataFrame, new_df: pd.DataFrame) -> tuple[int, int, int]:
+def _row_to_dict(row: pd.Series) -> dict:
+    out: dict = {}
+    for k, v in row.items():
+        if pd.isna(v):
+            out[k] = None
+        elif hasattr(v, "item"):
+            out[k] = v.item()
+        else:
+            out[k] = v
+    return out
+
+
+def merge_and_save_parquet(path: Path, old_df: pd.DataFrame, new_df: pd.DataFrame) -> dict:
     rows_before = int(len(old_df))
     merged = pd.concat([old_df, new_df], ignore_index=True, sort=False)
     before_dedup = int(len(merged))
@@ -50,5 +62,10 @@ def merge_and_save_parquet(path: Path, old_df: pd.DataFrame, new_df: pd.DataFram
 
     rows_after = int(len(merged))
     deduped = int(before_dedup - rows_after)
-    return rows_before, rows_after, deduped
-
+    after_last_row = _row_to_dict(merged.iloc[-1]) if not merged.empty else None
+    return {
+        "rows_before": rows_before,
+        "rows_after": rows_after,
+        "deduped": deduped,
+        "after_last_row": after_last_row,
+    }

@@ -39,6 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pin RUN_YEAR (UTC)
+        run: |
+          set -euo pipefail
+          YEAR="$(date -u +%Y)"
+          echo "RUN_YEAR=$YEAR" >> "$GITHUB_ENV"
+          echo "Pinned RUN_YEAR=$YEAR"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -112,8 +119,16 @@ jobs:
             exit 0
           fi
 
-          mkdir -p data/tradingview
-          rclone copy "${RCLONE_REMOTE_PATH%/}/data/tradingview" ./data/tradingview -v || true
+          CONFIG_PATH="${{ github.event.inputs.config_path || 'config/collect_jobs.json' }}"
+          DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
+
+          mkdir -p "$DATA_ROOT/tradingview"
+          python scripts/pull_year_parquets.py \
+            --remote "${RCLONE_REMOTE_PATH%/}/data" \
+            --local-root "$DATA_ROOT" \
+            --config "$CONFIG_PATH" \
+            --run-year "$RUN_YEAR" \
+            --verbose
 
       - name: Run simple tvdatafeed collector
         env:
@@ -135,6 +150,22 @@ jobs:
             --max-bars "$MAX_BARS" \
             | tee tvdatafeed_summary.json
 
+      - name: Build detailed report artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f tvdatafeed_summary.json ]; then
+            echo '{"ok":[],"skipped":[],"failed":[{"error":"summary file missing"}]}' > tvdatafeed_summary.json
+          fi
+
+          python scripts/build_tv_report.py \
+            --summary tvdatafeed_summary.json \
+            --out-json tvdatafeed_report.json \
+            --out-md tvdatafeed_report.md
+
+          echo "===== tvdatafeed_report.md ====="
+          sed -n '1,220p' tvdatafeed_report.md
+
       - name: Push updated tvdatafeed files to Drive (optional)
         if: always()
         run: |
@@ -144,8 +175,10 @@ jobs:
             exit 0
           fi
 
-          rclone copy ./data/tradingview "${RCLONE_REMOTE_PATH%/}/data/tradingview" \
-            --include "**/*.parquet" \
+          DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
+
+          rclone copy "$DATA_ROOT/tradingview" "${RCLONE_REMOTE_PATH%/}/data/tradingview" \
+            --include "**/${RUN_YEAR}.parquet" \
             --create-empty-src-dirs \
             -v
 
@@ -154,5 +187,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tvdatafeed-summary
-          path: tvdatafeed_summary.json
+          path: |
+            tvdatafeed_summary.json
+            tvdatafeed_report.json
+            tvdatafeed_report.md
           if-no-files-found: ignore
