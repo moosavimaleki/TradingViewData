@@ -191,6 +191,27 @@
     {
       "enabled": true,
       "source": "tradingview",
+      "symbol": "DXY",
+      "broker": "TVC",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DXY",
+      "broker": "TVC",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DXY",
+      "broker": "TVC",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
       "symbol": "BTCUSDT",
       "broker": "BINANCE",
       "timeframe": "1m"
@@ -229,6 +250,27 @@
       "symbol": "BTCUSDT",
       "broker": "BINANCE",
       "timeframe": "1d"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BTCUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BTCUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BTCUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
     },
     {
       "enabled": false,
