@@ -253,7 +253,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tvdatafeed-report-${{ env.RUN_DATE_UTC }}
+          name: tvdatafeed-summary-${{ env.RUN_DATE_UTC }}
           path: |
+            tvdatafeed_summary.json
+            tvdatafeed_pull.json
             tvdatafeed_report.md
           if-no-files-found: ignore
