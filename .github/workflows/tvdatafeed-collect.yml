@@ -47,9 +47,11 @@ jobs:
           YEAR="$(date -u +%Y)"
           RUN_DATE_UTC="$(date -u +%F)"
           RUN_TS_UTC="$(date -u +%FT%TZ)"
+          RUN_STAMP_UTC="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
           echo "RUN_YEAR=$YEAR" >> "$GITHUB_ENV"
           echo "RUN_DATE_UTC=$RUN_DATE_UTC" >> "$GITHUB_ENV"
           echo "RUN_TS_UTC=$RUN_TS_UTC" >> "$GITHUB_ENV"
+          echo "RUN_STAMP_UTC=$RUN_STAMP_UTC" >> "$GITHUB_ENV"
           echo "Pinned RUN_YEAR=$YEAR"
 
       - uses: actions/setup-python@v5
@@ -222,7 +224,7 @@ jobs:
           set -euo pipefail
 
           REPORT_DIR="artifacts/tvdatafeed"
-          REPORT_FILE="$REPORT_DIR/${RUN_DATE_UTC}.md"
+          REPORT_FILE="$REPORT_DIR/${RUN_STAMP_UTC}.md"
           mkdir -p "$REPORT_DIR"
           cp -f tvdatafeed_report.md "$REPORT_FILE"
 
@@ -236,7 +238,7 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: update tvdatafeed report ${RUN_DATE_UTC} (run ${GITHUB_RUN_ID})"
+          git commit -m "chore: add tvdatafeed report ${RUN_STAMP_UTC} (run ${GITHUB_RUN_ID})"
           BRANCH="${GITHUB_REF_NAME}"
           for i in 1 2 3; do
             if git pull --rebase origin "$BRANCH" && git push origin "HEAD:${BRANCH}"; then
