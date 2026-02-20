@@ -49,6 +49,15 @@ def _iter_targets(config_path: Path, run_year: int) -> Iterable[str]:
         yield rel
 
 
+def _extract_timeframes(targets: Iterable[str]) -> List[str]:
+    timeframes: Set[str] = set()
+    for rel in targets:
+        parts = rel.split("/")
+        if len(parts) >= 4:
+            timeframes.add(parts[2])
+    return sorted(timeframes)
+
+
 def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     output = (proc.stdout or "") + (proc.stderr or "")
@@ -115,6 +124,7 @@ def _looks_missing(output: str) -> bool:
 def _list_remote_year_files(
     remote_data_root: str,
     run_year: int,
+    timeframe_filters: Iterable[str],
     *,
     attempts: int,
     delay_seconds: float,
@@ -127,9 +137,14 @@ def _list_remote_year_files(
         remote_tv_root,
         "--recursive",
         "--files-only",
-        "--include",
-        f"**/{int(run_year)}.parquet",
     ]
+    filters = [str(tf).strip() for tf in timeframe_filters if str(tf).strip()]
+    if filters:
+        for tf in sorted(set(filters)):
+            cmd.extend(["--include", f"**/{tf}/*/{int(run_year)}.parquet"])
+    else:
+        cmd.extend(["--include", f"**/{int(run_year)}.parquet"])
+
     rc, output = _run_with_retry(
         cmd,
         attempts=attempts,
@@ -195,6 +210,7 @@ def main() -> None:
     out_json = Path(args.out_json).resolve() if str(args.out_json).strip() else None
 
     expected_targets = sorted(_iter_targets(config_path=config_path, run_year=run_year))
+    expected_timeframes = _extract_timeframes(expected_targets)
     report: Dict[str, Any] = {
         "status": "running",
         "run_year": run_year,
@@ -205,6 +221,7 @@ def main() -> None:
         "retry_delay": retry_delay,
         "expected_count": len(expected_targets),
         "expected_files": expected_targets,
+        "expected_timeframes": expected_timeframes,
         "listed_count": 0,
         "listed_files": [],
         "pulled_count": 0,
@@ -218,13 +235,17 @@ def main() -> None:
         "ls_error": None,
     }
 
-    remote_files, ls_error = _list_remote_year_files(
-        remote_data_root=args.remote,
-        run_year=run_year,
-        attempts=retries,
-        delay_seconds=retry_delay,
-        verbose=args.verbose,
-    )
+    if expected_targets:
+        remote_files, ls_error = _list_remote_year_files(
+            remote_data_root=args.remote,
+            run_year=run_year,
+            timeframe_filters=expected_timeframes,
+            attempts=retries,
+            delay_seconds=retry_delay,
+            verbose=args.verbose,
+        )
+    else:
+        remote_files, ls_error = set(), None
     if ls_error is not None:
         report["status"] = "ls_failed"
         report["ls_error"] = ls_error
@@ -239,17 +260,23 @@ def main() -> None:
         )
         raise SystemExit("remote year parquet ls failed")
 
-    listed_files = sorted(remote_files)
+    expected_set = set(expected_targets)
+    listed_files = sorted(remote_files & expected_set)
     report["listed_count"] = len(listed_files)
     report["listed_files"] = listed_files
+    report["listed_remote_count_raw"] = len(remote_files)
+    report["listed_remote_files_raw"] = sorted(remote_files)
 
     if args.verbose:
         print(
-            f"remote_year_listing run_year={run_year} listed={len(listed_files)} expected={len(expected_targets)}",
+            (
+                f"remote_year_listing run_year={run_year} expected={len(expected_targets)} "
+                f"timeframes={','.join(expected_timeframes) if expected_timeframes else '-'} "
+                f"listed_raw={len(remote_files)} listed_expected={len(listed_files)}"
+            ),
             flush=True,
         )
 
-    expected_set = set(expected_targets)
     missing_targets = sorted(expected_set - remote_files)
     if missing_targets:
         for rel in missing_targets:
