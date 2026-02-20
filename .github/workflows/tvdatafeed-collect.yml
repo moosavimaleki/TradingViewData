@@ -124,23 +124,7 @@ jobs:
           set -euo pipefail
           if [ "${RCLONE_ENABLED:-0}" != "1" ]; then
             echo "rclone not configured. Skipping pull."
-            cat > tvdatafeed_pull.json <<EOF
-            {
-              "status": "skipped",
-              "reason": "rclone not configured",
-              "run_year": ${RUN_YEAR},
-              "expected_count": 0,
-              "listed_count": 0,
-              "pulled_count": 0,
-              "remote_absent_count": 0,
-              "copy_missing_count": 0,
-              "failed_count": 0,
-              "pulled_files": [],
-              "remote_absent_files": [],
-              "copy_missing_files": [],
-              "failed_files": []
-            }
-            EOF
+            printf '%s\n' "{\"status\":\"skipped\",\"reason\":\"rclone not configured\",\"run_year\":${RUN_YEAR},\"expected_count\":0,\"listed_count\":0,\"pulled_count\":0,\"remote_absent_count\":0,\"copy_missing_count\":0,\"failed_count\":0,\"pulled_files\":[],\"remote_absent_files\":[],\"copy_missing_files\":[],\"failed_files\":[]}" > tvdatafeed_pull.json
             exit 0
           fi
 
@@ -212,6 +196,10 @@ jobs:
           fi
 
           DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
+          if [ ! -d "$DATA_ROOT/tradingview" ]; then
+            echo "No local tradingview directory. Skipping push."
+            exit 0
+          fi
 
           rclone copy "$DATA_ROOT/tradingview" "${RCLONE_REMOTE_PATH%/}/data/tradingview" \
             --include "**/${RUN_YEAR}.parquet" \
