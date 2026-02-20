@@ -300,7 +300,6 @@ async def _tv_data_probe(
     chart_url: str,
     ws_url: str,
     ws_origin: str,
-    auth_token: str,
     symbol: str,
     interval: str,
     timeout_sec: int,
@@ -323,7 +322,7 @@ async def _tv_data_probe(
             ws_url=ws_url,
             ws_origin=ws_origin,
             cookie_string="",
-            auth_token=auth_token or "unauthorized_user_token",
+            auth_token="unauthorized_user_token",
             symbol=symbol,
             interval=interval,
             range_type="BarSetRange@tv-basicstudies-72!",
@@ -399,7 +398,6 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Deep diagnostics for TradingView connectivity on GitHub Actions.")
     p.add_argument("--symbol", default=os.getenv("TV_PROXY_TEST_SYMBOL", "BLACKBULL:XAUUSD"))
     p.add_argument("--interval", default=os.getenv("TV_PROXY_TEST_INTERVAL", "1"))
-    p.add_argument("--auth-token", default=os.getenv("TV_AUTH_TOKEN", "unauthorized_user_token"))
     p.add_argument("--chart-url", default=os.getenv("TV_CHART_URL", "https://www.tradingview.com/chart/"))
     p.add_argument("--ws-url", default=os.getenv("TV_WS_URL", ""))
     p.add_argument("--ws-origin", default=os.getenv("TV_WS_ORIGIN", ""))
@@ -470,7 +468,6 @@ async def _run_async_checks(args: argparse.Namespace, report: Dict[str, Any]) ->
             chart_url=str(args.chart_url).strip(),
             ws_url=ws_url,
             ws_origin=ws_origin,
-            auth_token=str(args.auth_token).strip() or "unauthorized_user_token",
             symbol=str(args.symbol).strip(),
             interval=str(args.interval).strip(),
             timeout_sec=int(args.probe_timeout),
@@ -569,7 +566,6 @@ async def _run_async_checks(args: argparse.Namespace, report: Dict[str, Any]) ->
             chart_url=str(args.chart_url).strip(),
             ws_url=str(tv_target["ws_url"]),
             ws_origin=str(tv_target["ws_origin"]),
-            auth_token=str(args.auth_token).strip() or "unauthorized_user_token",
             symbol=str(args.symbol).strip(),
             interval=str(args.interval).strip(),
             timeout_sec=int(args.probe_timeout),

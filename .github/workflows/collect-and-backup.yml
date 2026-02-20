@@ -68,7 +68,6 @@ jobs:
       - name: Discover healthy websocket proxies
         env:
           PYTHONUNBUFFERED: "1"
-          TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
           TV_PROXY_SCAN_COUNT: ${{ vars.TV_PROXY_SCAN_COUNT }}
           TV_PROXY_SCAN_MIN_COUNT: ${{ vars.TV_PROXY_SCAN_MIN_COUNT }}
           TV_PROXY_SCAN_TIMEOUT: ${{ vars.TV_PROXY_SCAN_TIMEOUT }}
@@ -119,7 +118,6 @@ jobs:
           TV_FASTPASS_CHART_URL: ${{ secrets.TV_FASTPASS_CHART_URL }}
           TV_FASTPASS_WS_URL: ${{ secrets.TV_FASTPASS_WS_URL }}
           TV_FASTPASS_WS_ORIGIN: ${{ secrets.TV_FASTPASS_WS_ORIGIN }}
-          TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
           TV_WS_DEBUG: ${{ vars.TV_WS_DEBUG }}
           DATA_COLLECTOR_LOG_LEVEL: ${{ vars.DATA_COLLECTOR_LOG_LEVEL }}
           TV_BACKFILL_MAX_EMPTY_WINDOWS: ${{ vars.TV_BACKFILL_MAX_EMPTY_WINDOWS }}

@@ -74,11 +74,6 @@ def _parse_args() -> argparse.Namespace:
         help="Optional websocket origin override for proxy validation.",
     )
     p.add_argument(
-        "--test-auth-token",
-        default=os.getenv("TV_AUTH_TOKEN", "unauthorized_user_token"),
-        help="Auth token used in TradingView WS probe.",
-    )
-    p.add_argument(
         "--test-symbol",
         default=os.getenv("TV_PROXY_TEST_SYMBOL", "BLACKBULL:XAUUSD"),
         help="Symbol used in TradingView WS probe.",
@@ -187,7 +182,7 @@ async def _check_proxy(proxy: str, timeout_sec: float) -> bool:
                 ws_url=_PROBE_SETTINGS["ws_url"],
                 ws_origin=_PROBE_SETTINGS["ws_origin"],
                 cookie_string="",
-                auth_token=_PROBE_SETTINGS["auth_token"],
+                auth_token="unauthorized_user_token",
                 symbol=_PROBE_SETTINGS["symbol"],
                 interval=_PROBE_SETTINGS["interval"],
                 range_type="BarSetRange@tv-basicstudies-72!",
@@ -324,7 +319,6 @@ def main() -> None:
         "chart_url": str(args.test_chart_url).strip(),
         "ws_url": str(args.test_ws_url).strip(),
         "ws_origin": str(args.test_ws_origin).strip(),
-        "auth_token": str(args.test_auth_token).strip() or "unauthorized_user_token",
         "symbol": str(args.test_symbol).strip(),
         "interval": str(args.test_interval).strip(),
         "min_bars": max(1, int(args.test_min_bars)),

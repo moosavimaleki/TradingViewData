@@ -96,7 +96,6 @@ class Settings:
                     "ws_url": "",
                     "ws_origin": "",
                     "ws_proxy": "",
-                    "auth_token": "unauthorized_user_token",
                     "default_broker": "OANDA",
                     "range_type": "BarSetRange@tv-basicstudies-72!",
                     "range_base_interval": "1",

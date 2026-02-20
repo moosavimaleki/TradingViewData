@@ -84,8 +84,8 @@ class TradingViewWebSocketSource(DataSource):
             str(config.get("ws_direct_first", "1")).strip().lower() in {"1", "true", "yes", "on"},
         )
 
-        # Auth: guest token by default (no cookies / login required).
-        self.auth_token = os.getenv("TV_AUTH_TOKEN", str(config.get("auth_token") or "unauthorized_user_token")).strip()
+        # Direct TradingView source always uses guest auth.
+        self.auth_token = "unauthorized_user_token"
 
         # Range-bar config (TV internal type).
         self.range_type = str(config.get("range_type") or "BarSetRange@tv-basicstudies-72!")
@@ -258,7 +258,7 @@ class TradingViewWebSocketSource(DataSource):
                 f"symbol={symbol} tv_symbol={tv_symbol} timeframe={timeframe} interval={interval} "
                 f"n_bars={int(n_bars)} attempts={max_attempts} proxies={len(self.ws_proxy_pool)} "
                 f"direct_fallback={self.ws_direct_fallback} direct_first={self.ws_direct_first} "
-                f"max_proxy_attempts={self.max_proxy_attempts}"
+                f"max_proxy_attempts={self.max_proxy_attempts} auth_mode=guest"
             )
 
         for attempt in range(1, max_attempts + 1):

@@ -79,7 +79,6 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
           TV_WS_DEBUG: "1"
-          TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
           TV_CHART_URL: ${{ secrets.TV_CHART_URL }}
           TV_WS_URL: ${{ secrets.TV_WS_URL }}
           TV_WS_ORIGIN: ${{ secrets.TV_WS_ORIGIN }}
@@ -104,8 +103,6 @@ jobs:
             WS_ORIGIN="${TV_FASTPASS_WS_ORIGIN:-}"
           fi
 
-          AUTH_TOKEN="${TV_AUTH_TOKEN:-unauthorized_user_token}"
-
           echo "diagnostics chart_url=$CHART_URL"
           echo "diagnostics ws_url=${WS_URL:-<auto>}"
           echo "diagnostics ws_origin=${WS_ORIGIN:-<auto>}"
@@ -122,7 +119,6 @@ jobs:
           python scripts/tradingview_network_diagnostics.py \
             --symbol "${{ inputs.symbol }}" \
             --interval "${{ inputs.interval }}" \
-            --auth-token "$AUTH_TOKEN" \
             --chart-url "$CHART_URL" \
             --ws-url "$WS_URL" \
             --ws-origin "$WS_ORIGIN" \
