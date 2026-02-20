@@ -4,8 +4,9 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Iterable, Set, Tuple
+from typing import Iterable, List, Set, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -38,11 +39,104 @@ def _iter_targets(config_path: Path, run_year: int) -> Iterable[str]:
         yield rel
 
 
-def _copyto(remote_file: str, local_file: Path) -> Tuple[int, str]:
-    cmd = ["rclone", "copyto", remote_file, str(local_file), "-v"]
+def _run_cmd(cmd: List[str]) -> Tuple[int, str]:
     proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
     output = (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, output
+
+
+def _run_with_retry(
+    cmd: List[str],
+    *,
+    attempts: int,
+    delay_seconds: float,
+    label: str,
+    verbose: bool,
+) -> Tuple[int, str]:
+    final_rc = 1
+    final_out = ""
+    for idx in range(1, attempts + 1):
+        rc, out = _run_cmd(cmd)
+        if rc == 0:
+            return rc, out
+        final_rc = rc
+        final_out = out
+        if verbose:
+            print(f"[retry] {label} attempt={idx}/{attempts} failed rc={rc}", flush=True)
+        if idx < attempts:
+            time.sleep(delay_seconds)
+    return final_rc, final_out
+
+
+def _looks_missing(output: str) -> bool:
+    low = output.lower()
+    return any(
+        key in low
+        for key in (
+            "not found",
+            "directory not found",
+            "couldn't find file",
+            "could not find file",
+            "file not found",
+            "object not found",
+        )
+    )
+
+
+def _list_remote_year_files(
+    remote_data_root: str,
+    run_year: int,
+    *,
+    attempts: int,
+    delay_seconds: float,
+    verbose: bool,
+) -> Set[str]:
+    remote_tv_root = _remote_join(remote_data_root, "tradingview")
+    cmd = [
+        "rclone",
+        "lsf",
+        remote_tv_root,
+        "--recursive",
+        "--files-only",
+        "--include",
+        f"**/{int(run_year)}.parquet",
+    ]
+    rc, output = _run_with_retry(
+        cmd,
+        attempts=attempts,
+        delay_seconds=delay_seconds,
+        label=f"ls year={int(run_year)}",
+        verbose=verbose,
+    )
+    if rc != 0:
+        print(output, flush=True)
+        raise SystemExit("remote year parquet ls failed")
+
+    files: Set[str] = set()
+    for raw in output.splitlines():
+        line = raw.strip().replace("\\", "/").strip("/")
+        if not line:
+            continue
+        files.add(f"tradingview/{line}")
+    return files
+
+
+def _copyto_with_retry(
+    remote_file: str,
+    local_file: Path,
+    *,
+    attempts: int,
+    delay_seconds: float,
+    verbose: bool,
+) -> Tuple[int, str]:
+    cmd = ["rclone", "copyto", remote_file, str(local_file), "-v"]
+    return _run_with_retry(
+        cmd,
+        attempts=attempts,
+        delay_seconds=delay_seconds,
+        label=f"copy {remote_file}",
+        verbose=verbose,
+    )
 
 
 def main() -> None:
@@ -51,48 +145,86 @@ def main() -> None:
     parser.add_argument("--local-root", default="data", help="local data root")
     parser.add_argument("--config", default="config/collect_jobs.json", help="jobs config path")
     parser.add_argument("--run-year", type=int, required=True, help="pinned run year (UTC)")
+    parser.add_argument("--retries", type=int, default=3, help="retry attempts for ls/copy")
+    parser.add_argument("--retry-delay", type=float, default=5.0, help="delay between retries (seconds)")
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     local_root = Path(args.local_root).resolve()
     local_root.mkdir(parents=True, exist_ok=True)
     config_path = Path(args.config).resolve()
+    retries = max(1, int(args.retries))
+    retry_delay = max(0.0, float(args.retry_delay))
+    run_year = int(args.run_year)
 
-    pulled = 0
+    expected_targets = sorted(_iter_targets(config_path=config_path, run_year=run_year))
+    expected_set = set(expected_targets)
+
+    remote_files = _list_remote_year_files(
+        remote_data_root=args.remote,
+        run_year=run_year,
+        attempts=retries,
+        delay_seconds=retry_delay,
+        verbose=args.verbose,
+    )
+
     missing = 0
+    pulled = 0
     failed = 0
 
-    for rel in _iter_targets(config_path=config_path, run_year=int(args.run_year)):
+    if args.verbose:
+        print(
+            f"remote_year_listing run_year={run_year} listed={len(remote_files)} expected={len(expected_targets)}",
+            flush=True,
+        )
+
+    missing_targets = sorted(expected_set - remote_files)
+    if missing_targets:
+        for rel in missing_targets:
+            print(f"missing_on_remote: {rel}", flush=True)
+        missing += len(missing_targets)
+
+    for rel in expected_targets:
+        if rel not in remote_files:
+            continue
         remote_file = _remote_join(args.remote, rel)
         local_file = local_root / rel
         local_file.parent.mkdir(parents=True, exist_ok=True)
 
-        rc, output = _copyto(remote_file=remote_file, local_file=local_file)
+        rc, output = _copyto_with_retry(
+            remote_file=remote_file,
+            local_file=local_file,
+            attempts=retries,
+            delay_seconds=retry_delay,
+            verbose=args.verbose,
+        )
         if rc == 0:
-            pulled += 1
-            if args.verbose:
-                print(f"pulled: {rel}", flush=True)
-            continue
+            if local_file.exists():
+                pulled += 1
+                if args.verbose:
+                    print(f"pulled: {rel}", flush=True)
+                continue
+            output = f"{output}\ncopy succeeded but local file missing: {local_file}"
 
-        low = output.lower()
-        if "not found" in low or "directory not found" in low or "couldn't find file" in low:
+        if _looks_missing(output):
             missing += 1
-            if args.verbose:
-                print(f"missing: {rel}", flush=True)
+            print(f"missing_after_copy: {rel}", flush=True)
             continue
 
         failed += 1
         print(f"error pulling {rel}:\n{output}", flush=True)
 
     print(
-        f"year_parquet_pull_summary run_year={int(args.run_year)} pulled={pulled} missing={missing} failed={failed}",
+        (
+            f"year_parquet_pull_summary run_year={run_year} expected={len(expected_targets)} "
+            f"listed={len(remote_files)} pulled={pulled} missing={missing} failed={failed} retries={retries}"
+        ),
         flush=True,
     )
 
-    if failed > 0:
+    if missing > 0 or failed > 0:
         raise SystemExit(1)
 
 
 if __name__ == "__main__":
     main()
-

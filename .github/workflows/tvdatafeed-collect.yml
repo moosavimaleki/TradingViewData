@@ -128,6 +128,8 @@ jobs:
             --local-root "$DATA_ROOT" \
             --config "$CONFIG_PATH" \
             --run-year "$RUN_YEAR" \
+            --retries 5 \
+            --retry-delay 6 \
             --verbose
 
       - name: Run simple tvdatafeed collector
