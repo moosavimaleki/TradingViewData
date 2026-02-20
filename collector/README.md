@@ -43,3 +43,18 @@ data/tradingview/BLACKBULL/1m/XAUUSD/data.csv
 - range-barهایی مثل `100R` دیگر `skip` نمی‌شوند و با WS مستقیم گرفته می‌شوند.
 - برای range-bar، آخرین کندل قبل از ذخیره حذف می‌شود (چون معمولا هنوز unstable است).
 - برای لاگ کامل websocket می‌توانی قبل از اجرا `TV_WS_DEBUG=1` بگذاری.
+
+## ذخیره سالانه Parquet
+
+برای ذخیره‌ی سالانه (یک فایل برای سال اجرای job) از این اسکریپت استفاده کن:
+
+```bash
+python collector/yearly_candles_store.py \
+  --broker BLACKBULL \
+  --timeframe 1h \
+  --symbol EURUSD \
+  --base-dir data/tradingview
+```
+
+مسیر خروجی:
+`data/tradingview/{BROKER}/{TIMEFRAME}/{SYMBOL}/{RUN_YEAR}.parquet`
