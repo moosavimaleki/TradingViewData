@@ -34,10 +34,12 @@ jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Pin RUN_YEAR (UTC)
         run: |
@@ -183,6 +185,53 @@ jobs:
             --include "**/${RUN_YEAR}.parquet" \
             --create-empty-src-dirs \
             -v
+
+      - name: Commit report artifacts to repository
+        if: always()
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="artifacts/tvdatafeed"
+          mkdir -p "$ARTIFACT_DIR"
+
+          cp -f tvdatafeed_summary.json "$ARTIFACT_DIR/summary.json"
+          cp -f tvdatafeed_report.json "$ARTIFACT_DIR/report.json"
+          cp -f tvdatafeed_report.md "$ARTIFACT_DIR/report.md"
+
+          cat > "$ARTIFACT_DIR/meta.json" <<EOF
+          {
+            "run_year": ${RUN_YEAR},
+            "run_id": "${GITHUB_RUN_ID}",
+            "run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "generated_at_utc": "$(date -u +%FT%TZ)"
+          }
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add "$ARTIFACT_DIR/summary.json" \
+                  "$ARTIFACT_DIR/report.json" \
+                  "$ARTIFACT_DIR/report.md" \
+                  "$ARTIFACT_DIR/meta.json"
+
+          if git diff --cached --quiet; then
+            echo "No artifact changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: update tvdatafeed artifacts (run ${GITHUB_RUN_ID})"
+          BRANCH="${GITHUB_REF_NAME}"
+          for i in 1 2 3; do
+            if git pull --rebase origin "$BRANCH" && git push origin "HEAD:${BRANCH}"; then
+              exit 0
+            fi
+            if [ "$i" -eq 3 ]; then
+              echo "Failed to push artifact commit after retries."
+              exit 1
+            fi
+            sleep 3
+          done
 
       - name: Upload summary artifact
         if: always()
