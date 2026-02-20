@@ -91,6 +91,10 @@ class TradingViewWebSocketSource(DataSource):
         self._known_brokers = set(ContractManager().standard_brokers.values())
 
     @staticmethod
+    def _ws_debug_enabled() -> bool:
+        return str(os.getenv("TV_WS_DEBUG", "0")).strip().lower() in {"1", "true", "yes", "on"}
+
+    @staticmethod
     def _parse_proxy_pool(raw: str) -> List[str]:
         if not raw:
             return []
@@ -177,10 +181,25 @@ class TradingViewWebSocketSource(DataSource):
         planned_variants = len(self.ws_proxy_pool) + (1 if self.ws_direct_fallback or not self.ws_proxy_pool else 0)
         max_attempts = max(1, int(self.max_retries), planned_variants)
         last_exc: Exception | None = None
+        debug_enabled = self._ws_debug_enabled()
+
+        if debug_enabled:
+            logger.info(
+                "[ws-debug] tradingview fetch_latest start "
+                f"symbol={symbol} tv_symbol={tv_symbol} timeframe={timeframe} interval={interval} "
+                f"n_bars={int(n_bars)} attempts={max_attempts} proxies={len(self.ws_proxy_pool)} "
+                f"direct_fallback={self.ws_direct_fallback}"
+            )
 
         for attempt in range(1, max_attempts + 1):
             try:
                 ws_proxy = self._proxy_for_attempt(attempt)
+                if debug_enabled:
+                    logger.info(
+                        "[ws-debug] tradingview attempt "
+                        f"{attempt}/{max_attempts} ws_url={self.ws_url or '(auto)'} "
+                        f"ws_origin={self.ws_origin or '(auto)'} proxy={ws_proxy or '(direct)'}"
+                    )
                 return asyncio.run(
                     fetch_bars_ws(
                         chart_url=self.chart_url,
@@ -201,6 +220,11 @@ class TradingViewWebSocketSource(DataSource):
                 )
             except Exception as e:
                 last_exc = e
+                if debug_enabled:
+                    logger.info(
+                        f"[ws-debug] tradingview attempt failed {attempt}/{max_attempts} "
+                        f"err_type={type(e).__name__} err={e}"
+                    )
                 if attempt >= max_attempts or not self._is_retryable_ws_error(e):
                     raise
                 backoff = min(90.0, float(self.retry_base_sleep_sec) * (2 ** (attempt - 1)))

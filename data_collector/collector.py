@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Type, Union
 import time
+import os
 import pandas as pd
 from pathlib import Path
 import re
@@ -35,7 +36,9 @@ class DataCollector:
     
     def _setup_logging(self):
         log_config = self.settings.get('logging', {})
-        log_level = getattr(logging, log_config.get('level', 'INFO'))
+        env_level = str(os.getenv("DATA_COLLECTOR_LOG_LEVEL", "")).strip().upper()
+        level_name = env_level or str(log_config.get('level', 'INFO')).strip().upper()
+        log_level = getattr(logging, level_name, logging.INFO)
         
         handlers = [logging.StreamHandler()]
         
@@ -230,13 +233,30 @@ class DataCollector:
         overlap_seconds = max(seconds_per_bar, overlap_seconds)
         overlap_seconds = min(overlap_seconds, max(seconds_per_bar, window_seconds // 5))
 
+        ws_debug = str(os.getenv("TV_WS_DEBUG", "0")).strip().lower() in {"1", "true", "yes", "on"}
+        max_empty_windows = max(1, int(os.getenv("TV_BACKFILL_MAX_EMPTY_WINDOWS", "4")))
+
         frames: List[pd.DataFrame] = []
         cursor_start = start_utc
         max_windows = 5000
         window_count = 0
+        consecutive_empty_windows = 0
+
+        if ws_debug:
+            logger.info(
+                f"[ws-debug] backfill start symbol={symbol} source={source_name} tf={timeframe} "
+                f"start={start_utc.isoformat()} end={end_utc.isoformat()} "
+                f"window_seconds={window_seconds} overlap_seconds={overlap_seconds} "
+                f"max_empty_windows={max_empty_windows}"
+            )
 
         while cursor_start < end_utc and window_count < max_windows:
             cursor_end = min(end_utc, cursor_start + timedelta(seconds=window_seconds))
+            if ws_debug:
+                logger.info(
+                    f"[ws-debug] backfill window {window_count + 1} "
+                    f"from={cursor_start.isoformat()} to={cursor_end.isoformat()}"
+                )
             part = source.fetch_data(
                 symbol=symbol,
                 start_date=cursor_start,
@@ -245,6 +265,26 @@ class DataCollector:
             )
             if not part.empty:
                 frames.append(part)
+                consecutive_empty_windows = 0
+                if ws_debug:
+                    logger.info(
+                        f"[ws-debug] backfill window {window_count + 1} rows={len(part)} "
+                        f"first_ts={part['timestamp'].min() if 'timestamp' in part.columns else 'n/a'} "
+                        f"last_ts={part['timestamp'].max() if 'timestamp' in part.columns else 'n/a'}"
+                    )
+            else:
+                consecutive_empty_windows += 1
+                logger.warning(
+                    f"Backfill window returned empty data for {symbol} {timeframe} from {source_name}; "
+                    f"window={window_count + 1} range={cursor_start.isoformat()}..{cursor_end.isoformat()} "
+                    f"consecutive_empty={consecutive_empty_windows}/{max_empty_windows}"
+                )
+                if consecutive_empty_windows >= max_empty_windows:
+                    logger.warning(
+                        f"Stopping backfill early for {symbol} {timeframe} from {source_name} "
+                        f"after {consecutive_empty_windows} consecutive empty windows."
+                    )
+                    break
 
             next_start = cursor_end - timedelta(seconds=overlap_seconds)
             if next_start <= cursor_start:

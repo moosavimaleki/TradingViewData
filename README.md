@@ -63,6 +63,18 @@ Workflow اصلی:
 Workflow تست دیده‌شدن:
 - `.github/workflows/ping.yml`
 
+Workflow دیباگ شبکه/وب‌سوکت:
+- `.github/workflows/tradingview-network-diagnostics.yml`
+  - به‌صورت دستی (`workflow_dispatch`) اجرا می‌شود.
+  - DNS/TCP/TLS/HTTP را جداگانه تست می‌کند.
+  - WebSocket عمومی (کنترل)، WebSocket مستقیم TradingView، و WebSocket از طریق پروکسی‌های رایگان را تست می‌کند.
+  - خروجی کامل را به‌صورت Artifact شامل `tv_diag.log` و `tv_diag_report.json` آپلود می‌کند.
+
+دیباگ در Workflow اصلی:
+- اگر Repository Variable `TV_WS_DEBUG=1` باشد، لاگ‌های دقیق WebSocket در اجرای collector فعال می‌شود.
+- اگر Repository Variable `DATA_COLLECTOR_LOG_LEVEL=DEBUG` باشد، سطح لاگ عمومی پروژه روی DEBUG قرار می‌گیرد.
+- اگر Repository Variable `TV_BACKFILL_MAX_EMPTY_WINDOWS` تنظیم شود، تعداد پنجره‌های خالیِ پشت‌سرهم برای توقف زودهنگام backfill کنترل می‌شود (پیش‌فرض: `4`).
+
 ## Secrets موردنیاز
 
 حداقل:

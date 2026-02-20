@@ -104,6 +104,9 @@ jobs:
           TV_FASTPASS_WS_URL: ${{ secrets.TV_FASTPASS_WS_URL }}
           TV_FASTPASS_WS_ORIGIN: ${{ secrets.TV_FASTPASS_WS_ORIGIN }}
           TV_AUTH_TOKEN: ${{ secrets.TV_AUTH_TOKEN }}
+          TV_WS_DEBUG: ${{ vars.TV_WS_DEBUG }}
+          DATA_COLLECTOR_LOG_LEVEL: ${{ vars.DATA_COLLECTOR_LOG_LEVEL }}
+          TV_BACKFILL_MAX_EMPTY_WINDOWS: ${{ vars.TV_BACKFILL_MAX_EMPTY_WINDOWS }}
         run: |
           set -euo pipefail
           python -m data_collector.run --config config/collect_jobs.json --fail-on-error | tee run_summary.json
