@@ -60,32 +60,45 @@ jobs:
 
       - name: Install rclone (optional persistence)
         env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
           GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           set -euo pipefail
-          if [ -n "${GDRIVE_SA_JSON:-}" ] && [ -n "${GDRIVE_FOLDER_ID:-}" ]; then
+          if [ -n "${RCLONE_CONF:-}" ] || { [ -n "${GDRIVE_SA_JSON:-}" ] && [ -n "${GDRIVE_FOLDER_ID:-}" ]; }; then
             sudo apt-get update
             sudo apt-get install -y rclone
           else
             echo "Google Drive secrets not set. Skipping rclone install."
           fi
 
-      - name: Configure rclone (optional)
+      - name: Configure rclone (optional, OAuth preferred)
         env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
           GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_SHARED_DRIVE_ID: ${{ secrets.GDRIVE_SHARED_DRIVE_ID }}
+          GDRIVE_REMOTE_PATH: ${{ vars.GDRIVE_REMOTE_PATH }}
         run: |
           set -euo pipefail
-          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
+          if [ -z "${RCLONE_CONF:-}" ] && { [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; }; then
             echo "Google Drive secrets not set. Skipping rclone config."
+            echo "RCLONE_ENABLED=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          mkdir -p ~/.config/rclone
+          if [ -n "${RCLONE_CONF:-}" ]; then
+            printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+            echo "RCLONE_ENABLED=1" >> "$GITHUB_ENV"
+            echo "RCLONE_REMOTE_PATH=${GDRIVE_REMOTE_PATH:-gdrive:market-data}" >> "$GITHUB_ENV"
+            echo "RCLONE_CONFIG_MODE=oauth" >> "$GITHUB_ENV"
             exit 0
           fi
 
           SA_PATH="$GITHUB_WORKSPACE/sa.json"
           printf '%s' "$GDRIVE_SA_JSON" > "$SA_PATH"
 
-          mkdir -p ~/.config/rclone
           printf "%s\n" \
             "[gdrive]" \
             "type = drive" \
@@ -93,20 +106,42 @@ jobs:
             "service_account_file = $SA_PATH" \
             "root_folder_id = ${GDRIVE_FOLDER_ID}" \
             > ~/.config/rclone/rclone.conf
+          if [ -n "${GDRIVE_SHARED_DRIVE_ID:-}" ]; then
+            printf "%s\n" "team_drive = ${GDRIVE_SHARED_DRIVE_ID}" >> ~/.config/rclone/rclone.conf
+          fi
+          echo "RCLONE_ENABLED=1" >> "$GITHUB_ENV"
+          echo "RCLONE_REMOTE_PATH=${GDRIVE_REMOTE_PATH:-gdrive:}" >> "$GITHUB_ENV"
+          echo "RCLONE_CONFIG_MODE=service_account" >> "$GITHUB_ENV"
 
-      - name: Pull previous tvdatafeed files from Drive (optional)
-        env:
-          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+      - name: Validate Drive write access (optional)
         run: |
           set -euo pipefail
-          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
-            echo "Google Drive secrets not set. Skipping pull."
+          if [ "${RCLONE_ENABLED:-0}" != "1" ]; then
+            echo "rclone not configured. Skipping write check."
+            exit 0
+          fi
+          PROBE_FILE="$(mktemp)"
+          PROBE_REMOTE="${RCLONE_REMOTE_PATH%/}/.write_probe.txt"
+          echo "probe $(date -u +%FT%TZ)" > "$PROBE_FILE"
+          if ! OUT="$(rclone copyto "$PROBE_FILE" "$PROBE_REMOTE" -v 2>&1)"; then
+            echo "$OUT"
+            if echo "$OUT" | grep -qi "storageQuotaExceeded\|Service Accounts do not have storage quota"; then
+              echo "::error::Service Account cannot upload to My Drive. Use RCLONE_CONF (OAuth) or a Shared Drive."
+            fi
+            exit 1
+          fi
+          rclone deletefile "$PROBE_REMOTE" -v || true
+
+      - name: Pull previous tvdatafeed files from Drive (optional)
+        run: |
+          set -euo pipefail
+          if [ "${RCLONE_ENABLED:-0}" != "1" ]; then
+            echo "rclone not configured. Skipping pull."
             exit 0
           fi
 
           mkdir -p data/tradingview
-          rclone copy gdrive:data/tradingview ./data/tradingview -v || true
+          rclone copy "${RCLONE_REMOTE_PATH%/}/data/tradingview" ./data/tradingview -v || true
 
       - name: Run simple tvdatafeed collector
         env:
@@ -130,17 +165,14 @@ jobs:
 
       - name: Push updated tvdatafeed files to Drive (optional)
         if: always()
-        env:
-          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           set -euo pipefail
-          if [ -z "${GDRIVE_SA_JSON:-}" ] || [ -z "${GDRIVE_FOLDER_ID:-}" ]; then
-            echo "Google Drive secrets not set. Skipping push."
+          if [ "${RCLONE_ENABLED:-0}" != "1" ]; then
+            echo "rclone not configured. Skipping push."
             exit 0
           fi
 
-          rclone copy ./data/tradingview gdrive:data/tradingview \
+          rclone copy ./data/tradingview "${RCLONE_REMOTE_PATH%/}/data/tradingview" \
             --include "**/data.csv" \
             --create-empty-src-dirs \
             -v

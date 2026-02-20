@@ -90,9 +90,13 @@ Workflow دیباگ شبکه/وب‌سوکت:
 
 ## Secrets موردنیاز
 
-حداقل:
+روش پیشنهادی (پایدارتر برای اکانت شخصی رایگان):
+- `RCLONE_CONF` (محتوای کامل `~/.config/rclone/rclone.conf` با remote به نام `gdrive`)
+
+روش جایگزین (Service Account):
 - `GDRIVE_SA_JSON`
 - `GDRIVE_FOLDER_ID`
+- `GDRIVE_SHARED_DRIVE_ID` (برای جلوگیری از `storageQuotaExceeded`)
 
 اختیاری (بسته به سورس):
 - `FARAZ_COOKIES`
@@ -103,6 +107,9 @@ Workflow دیباگ شبکه/وب‌سوکت:
 
 نکته:
 - برای سورس `tradingview` نیازی به تنظیم توکن نیست و پروژه به‌صورت داخلی از guest auth استفاده می‌کند.
+- اگر `RCLONE_CONF` ست باشد، workflow از OAuth استفاده می‌کند و Service Account نادیده گرفته می‌شود.
+- اگر Service Account استفاده می‌کنی و مقصد داخل My Drive باشد، خطای `storageQuotaExceeded` می‌گیری؛
+  مقصد باید Shared Drive باشد یا از OAuth استفاده شود.
 
 اختیاری (برای WebSocket پایتون، فقط در مرحله Run collector):
 - `TV_WS_PROXY` (می‌تواند یک proxy یا pool چندخطی/Comma-separated باشد)
