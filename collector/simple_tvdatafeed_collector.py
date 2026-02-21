@@ -26,10 +26,10 @@ from collector.pipeline.ws_fetcher import TradingViewWSFetcher
 logger = logging.getLogger("collector.simple_tvdatafeed")
 
 
-def _ms_to_iso(ms: int | None) -> str | None:
-    if ms is None:
+def _ts_to_iso(ts_sec: float | None) -> str | None:
+    if ts_sec is None:
         return None
-    return datetime.fromtimestamp(int(ms) / 1000.0, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(float(ts_sec), tz=timezone.utc).isoformat()
 
 
 def _last_row(df) -> dict | None:
@@ -45,7 +45,7 @@ def _last_row(df) -> dict | None:
         else:
             out[k] = v
     if "ts" in out and out["ts"] is not None:
-        out["ts_iso"] = _ms_to_iso(int(out["ts"]))
+        out["ts_iso"] = _ts_to_iso(float(out["ts"]))
     return out
 
 
@@ -82,7 +82,7 @@ def _fetch_range_with_overlap(
         fetched = normalize_frame(raw, drop_latest_candle=True)
         if fetched.empty or cutoff_ts is None:
             break
-        earliest = int(fetched["ts"].min())
+        earliest = float(fetched["ts"].min())
         if earliest <= cutoff_ts or n_bars >= int(max_bars):
             break
         n_bars = min(int(max_bars), int(n_bars) * 2)
@@ -211,22 +211,22 @@ def main() -> None:
                 )
                 continue
 
-            old_last_ts = int(old_df["ts"].max()) if not old_df.empty else None
-            new_first_ts = int(new_df["ts"].min()) if not new_df.empty else None
-            new_last_ts = int(new_df["ts"].max()) if not new_df.empty else None
+            old_last_ts = float(old_df["ts"].max()) if not old_df.empty else None
+            new_first_ts = float(new_df["ts"].min()) if not new_df.empty else None
+            new_last_ts = float(new_df["ts"].max()) if not new_df.empty else None
             overlap_rows = 0
-            overlap_ms = 0
+            overlap_seconds = 0.0
             if new_first_ts is not None and not old_df.empty:
                 overlap_rows = int((old_df["ts"] >= new_first_ts).sum())
             if old_last_ts is not None and new_first_ts is not None and old_last_ts >= new_first_ts:
-                overlap_ms = int(old_last_ts - new_first_ts)
+                overlap_seconds = float(old_last_ts - new_first_ts)
 
             merge_stats = merge_and_save_parquet(out_file, old_df, new_df)
 
             after_last_ts = None
             after_last_row = merge_stats.get("after_last_row")
             if isinstance(after_last_row, dict) and after_last_row.get("ts") is not None:
-                after_last_ts = int(after_last_row["ts"])
+                after_last_ts = float(after_last_row["ts"])
 
             summary["ok"].append(
                 {
@@ -239,18 +239,19 @@ def main() -> None:
                     "rows_after": int(merge_stats["rows_after"]),
                     "deduped": int(merge_stats["deduped"]),
                     "before_last_ts": old_last_ts,
-                    "before_last_ts_iso": _ms_to_iso(old_last_ts),
+                    "before_last_ts_iso": _ts_to_iso(old_last_ts),
                     "before_last_row": _last_row(old_df),
                     "fetched_first_ts": new_first_ts,
-                    "fetched_first_ts_iso": _ms_to_iso(new_first_ts),
+                    "fetched_first_ts_iso": _ts_to_iso(new_first_ts),
                     "fetched_last_ts": new_last_ts,
-                    "fetched_last_ts_iso": _ms_to_iso(new_last_ts),
+                    "fetched_last_ts_iso": _ts_to_iso(new_last_ts),
                     "after_last_ts": after_last_ts,
-                    "after_last_ts_iso": _ms_to_iso(after_last_ts),
+                    "after_last_ts_iso": _ts_to_iso(after_last_ts),
                     "after_last_row": after_last_row,
                     "overlap_rows": int(overlap_rows),
-                    "overlap_ms": int(overlap_ms),
-                    "overlap_minutes": round(overlap_ms / 60000.0, 3),
+                    "overlap_seconds": round(overlap_seconds, 6),
+                    "overlap_ms": int(round(overlap_seconds * 1000.0)),
+                    "overlap_minutes": round(overlap_seconds / 60.0, 3),
                     "details": diag,
                     "file": str(out_file),
                 }

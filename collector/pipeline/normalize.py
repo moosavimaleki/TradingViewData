@@ -6,7 +6,7 @@ REQUIRED_NUMERIC = ("open", "high", "low", "close", "volume")
 TS_ALIASES = ("ts", "timestamp", "time", "datetime", "date", "index")
 
 
-def to_epoch_ms(series: pd.Series) -> pd.Series:
+def to_epoch_seconds(series: pd.Series) -> pd.Series:
     raw = series.copy()
     numeric = pd.to_numeric(raw, errors="coerce")
     out = pd.Series(index=raw.index, dtype="float64")
@@ -15,31 +15,31 @@ def to_epoch_ms(series: pd.Series) -> pd.Series:
     if numeric_mask.any():
         num = numeric[numeric_mask].astype("float64")
         abs_num = num.abs()
-        ms = pd.Series(index=num.index, dtype="float64")
+        sec = pd.Series(index=num.index, dtype="float64")
 
         ns_mask = abs_num >= 1e17
         us_mask = (abs_num >= 1e14) & (abs_num < 1e17)
         ms_mask = (abs_num >= 1e11) & (abs_num < 1e14)
         sec_mask = abs_num < 1e11
 
-        ms.loc[ns_mask] = num.loc[ns_mask] / 1_000_000.0
-        ms.loc[us_mask] = num.loc[us_mask] / 1_000.0
-        ms.loc[ms_mask] = num.loc[ms_mask]
-        ms.loc[sec_mask] = num.loc[sec_mask] * 1_000.0
-        out.loc[numeric_mask] = ms
+        sec.loc[ns_mask] = num.loc[ns_mask] / 1_000_000_000.0
+        sec.loc[us_mask] = num.loc[us_mask] / 1_000_000.0
+        sec.loc[ms_mask] = num.loc[ms_mask] / 1_000.0
+        sec.loc[sec_mask] = num.loc[sec_mask]
+        out.loc[numeric_mask] = sec
 
     non_numeric_mask = ~numeric_mask
     if non_numeric_mask.any():
         dt = pd.to_datetime(raw[non_numeric_mask], utc=True, errors="coerce")
         valid = dt.notna()
         if valid.any():
-            out.loc[dt[valid].index] = (dt[valid].astype("int64") // 1_000_000).astype("float64")
+            out.loc[dt[valid].index] = dt[valid].astype("int64").astype("float64") / 1_000_000_000.0
 
     if out.isna().any():
         bad = raw[out.isna()].head(5).tolist()
-        raise ValueError(f"Could not convert ts values to epoch-ms. sample={bad}")
+        raise ValueError(f"Could not convert ts values to epoch-seconds. sample={bad}")
 
-    return out.round().astype("int64")
+    return out.astype("float64")
 
 
 def normalize_frame(
@@ -75,7 +75,7 @@ def normalize_frame(
             else:
                 out[col] = 0.0 if col == "volume" else pd.NA
 
-    out["ts"] = to_epoch_ms(out["ts"])
+    out["ts"] = to_epoch_seconds(out["ts"])
 
     for col in REQUIRED_NUMERIC:
         out[col] = pd.to_numeric(out[col], errors="coerce")
@@ -89,8 +89,7 @@ def normalize_frame(
     if drop_latest_candle and not out.empty:
         out = out.iloc[:-1].reset_index(drop=True)
 
-    out["ts"] = out["ts"].astype("int64")
+    out["ts"] = out["ts"].astype("float64")
     for col in REQUIRED_NUMERIC:
         out[col] = out[col].astype("float64")
     return out
-

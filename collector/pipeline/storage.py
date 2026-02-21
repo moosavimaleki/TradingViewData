@@ -27,13 +27,13 @@ def load_existing_parquet(path: Path) -> pd.DataFrame:
     return normalize_frame(df, drop_latest_candle=False)
 
 
-def range_cutoff_ts(existing_df: pd.DataFrame, overlap_bars: int) -> Optional[int]:
+def range_cutoff_ts(existing_df: pd.DataFrame, overlap_bars: int) -> Optional[float]:
     if existing_df.empty or "ts" not in existing_df.columns:
         return None
     tail = existing_df.sort_values("ts").tail(max(1, int(overlap_bars)))
     if tail.empty:
         return None
-    return int(tail["ts"].iloc[0])
+    return float(tail["ts"].iloc[0])
 
 
 def _row_to_dict(row: pd.Series) -> dict:

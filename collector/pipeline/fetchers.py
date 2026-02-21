@@ -76,8 +76,8 @@ def compute_time_n_bars(
     if not tf_sec:
         return max(1, min(initial_bars, max_bars))
 
-    last_ms = int(existing_df["ts"].max())
-    last_dt = datetime.fromtimestamp(last_ms / 1000.0, tz=timezone.utc)
+    last_ts_sec = float(existing_df["ts"].max())
+    last_dt = datetime.fromtimestamp(last_ts_sec, tz=timezone.utc)
     now_utc = datetime.now(timezone.utc)
     delta_sec = max(0.0, (now_utc - last_dt).total_seconds())
     gap_bars = int(math.ceil(delta_sec / tf_sec))
@@ -85,4 +85,3 @@ def compute_time_n_bars(
     n_bars = gap_bars + max(1, overlap_bars)
     n_bars = max(overlap_bars * 3, n_bars)
     return max(1, min(int(n_bars), int(max_bars)))
-
