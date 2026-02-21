@@ -306,9 +306,9 @@ jobs:
             --run-artifact-url "$ARTIFACT_URL" \
             --run-at-utc "$RUN_TS_UTC"
 
-          grep -q "^Run: " tvdatafeed_report.md
-          grep -q "^Artifacts: " tvdatafeed_report.md
-          grep -q "^Artifact Download: " tvdatafeed_report.md
+          grep -q "Run:" tvdatafeed_report.md
+          grep -q "Artifacts:" tvdatafeed_report.md
+          grep -q "Artifact Download:" tvdatafeed_report.md
 
       - name: Commit report artifacts to repository (major only)
         if: always() && env.RUN_MODE == 'major' && steps.upload_summary.outcome == 'success'
@@ -319,9 +319,9 @@ jobs:
             exit 0
           fi
 
-          grep -q "^Run: " tvdatafeed_report.md
-          grep -q "^Artifacts: " tvdatafeed_report.md
-          grep -q "^Artifact Download: " tvdatafeed_report.md
+          grep -q "Run:" tvdatafeed_report.md
+          grep -q "Artifacts:" tvdatafeed_report.md
+          grep -q "Artifact Download:" tvdatafeed_report.md
 
           REPORT_DIR="artifacts/tvdatafeed"
           REPORT_FILE="$REPORT_DIR/${RUN_STAMP_UTC}.md"

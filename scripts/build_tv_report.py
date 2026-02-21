@@ -39,17 +39,55 @@ def _totals(ok: List[Dict[str, Any]], skipped: List[Dict[str, Any]], failed: Lis
     }
 
 
-def _append_list(lines: List[str], title: str, values: List[str], limit: int = 200) -> None:
-    lines.append(f"### {title}")
+def _fmt_int(value: Any) -> str:
+    try:
+        return f"{int(value or 0):,}"
+    except Exception:
+        return "0"
+
+
+def _short_path(path: str) -> str:
+    text = str(path or "-")
+    prefixes = (
+        "/home/runner/work/TradingViewData/TradingViewData/",
+        "/home/runner/work/TradingViewData/",
+    )
+    for prefix in prefixes:
+        if text.startswith(prefix):
+            return "./" + text[len(prefix) :]
+    return text
+
+
+def _overall_status(totals: Dict[str, Any], pull_report: Dict[str, Any]) -> tuple[str, str]:
+    pull_status = str(pull_report.get("status", "")).strip().lower()
+    failed_pull_states = {"ls_failed", "copy_failed", "copy_incomplete"}
+
+    if int(totals.get("failed_count", 0) or 0) > 0 or pull_status in failed_pull_states:
+        return "failed", "❌"
+    if int(totals.get("ok_count", 0) or 0) > 0:
+        return "success", "✅"
+    if int(totals.get("skipped_count", 0) or 0) > 0:
+        return "partial", "⚠️"
+    return "unknown", "❔"
+
+
+def _append_list(lines: List[str], title: str, values: List[str], *, emoji: str, limit: int = 200) -> None:
+    lines.append(f"### {emoji} {title}")
     lines.append("")
     if not values:
         lines.append("- (none)")
         lines.append("")
         return
+
+    lines.append("<details>")
+    lines.append(f"<summary>{len(values)} item(s)</summary>")
+    lines.append("")
     for value in values[:limit]:
         lines.append(f"- `{value}`")
     if len(values) > limit:
         lines.append(f"- ... and {len(values) - limit} more")
+    lines.append("")
+    lines.append("</details>")
     lines.append("")
 
 
@@ -69,17 +107,23 @@ def _build_markdown(
     ok = list(summary.get("ok") or [])
     skipped = list(summary.get("skipped") or [])
     failed = list(summary.get("failed") or [])
+    overall_state, overall_emoji = _overall_status(totals, pull_report)
 
     lines: List[str] = []
-    lines.append("# tvdatafeed Collect Report")
-    if run_url and run_url != "-":
-        lines.append(f"Run: {run_url}")
-    if run_artifacts_url and run_artifacts_url != "-":
-        lines.append(f"Artifacts: {run_artifacts_url}")
-    if run_artifact_url and run_artifact_url != "-":
-        lines.append(f"Artifact Download: {run_artifact_url}")
+    lines.append("# 📊 tvdatafeed Collect Report")
     lines.append("")
-    lines.append("## Run Context")
+    lines.append(f"**{overall_emoji} overall_status:** `{overall_state}`")
+    lines.append("")
+    lines.append("## 🔗 Run Links")
+    lines.append("")
+    if run_url and run_url != "-":
+        lines.append(f"- ▶️ Run: {run_url}")
+    if run_artifacts_url and run_artifacts_url != "-":
+        lines.append(f"- 📦 Artifacts: {run_artifacts_url}")
+    if run_artifact_url and run_artifact_url != "-":
+        lines.append(f"- ⬇️ Artifact Download: {run_artifact_url}")
+    lines.append("")
+    lines.append("## Run Context 🧭")
     lines.append("")
     lines.append(f"- run_date_utc: {run_date}")
     lines.append(f"- run_at_utc: {run_at_utc}")
@@ -87,35 +131,38 @@ def _build_markdown(
     lines.append(f"- github_run_id: {run_id}")
     lines.append("")
 
-    lines.append("## Drive Pull (Yearly Parquet Restore)")
+    lines.append("## Drive Pull ☁️ (Yearly Parquet Restore)")
     lines.append("")
     lines.append(f"- status: {pull_report.get('status', '-')}")
-    lines.append(f"- expected_count: {int(pull_report.get('expected_count', 0) or 0)}")
-    lines.append(f"- listed_count: {int(pull_report.get('listed_count', 0) or 0)}")
-    lines.append(f"- pulled_count: {int(pull_report.get('pulled_count', 0) or 0)}")
-    lines.append(f"- remote_absent_count: {int(pull_report.get('remote_absent_count', 0) or 0)}")
-    lines.append(f"- copy_missing_count: {int(pull_report.get('copy_missing_count', 0) or 0)}")
-    lines.append(f"- failed_count: {int(pull_report.get('failed_count', 0) or 0)}")
+    lines.append(f"- expected_count: {_fmt_int(pull_report.get('expected_count', 0))}")
+    lines.append(f"- listed_count: {_fmt_int(pull_report.get('listed_count', 0))}")
+    lines.append(f"- pulled_count: {_fmt_int(pull_report.get('pulled_count', 0))}")
+    lines.append(f"- remote_absent_count: {_fmt_int(pull_report.get('remote_absent_count', 0))}")
+    lines.append(f"- copy_missing_count: {_fmt_int(pull_report.get('copy_missing_count', 0))}")
+    lines.append(f"- failed_count: {_fmt_int(pull_report.get('failed_count', 0))}")
     lines.append(f"- retries: {pull_report.get('retries', '-')}")
     lines.append(f"- remote_root: {pull_report.get('remote', '-')}")
     lines.append("")
 
     if pull_report.get("ls_error"):
-        lines.append("### LS Error")
+        lines.append("### ❌ LS Error")
         lines.append("")
         lines.append("```text")
         lines.append(str(pull_report.get("ls_error", "")).strip())
         lines.append("```")
         lines.append("")
 
-    _append_list(lines, "Pulled Files From GDrive", list(pull_report.get("pulled_files") or []))
-    _append_list(lines, "Expected But Not On Remote (new targets)", list(pull_report.get("remote_absent_files") or []))
-    _append_list(lines, "Copy Missing Files", list(pull_report.get("copy_missing_files") or []))
+    _append_list(lines, "Pulled Files From GDrive", list(pull_report.get("pulled_files") or []), emoji="📥")
+    _append_list(lines, "Expected But Not On Remote (new targets)", list(pull_report.get("remote_absent_files") or []), emoji="🆕")
+    _append_list(lines, "Copy Missing Files", list(pull_report.get("copy_missing_files") or []), emoji="⚠️")
 
-    lines.append("### Copy Failures")
+    lines.append("### 🚨 Copy Failures")
     lines.append("")
     failed_files = list(pull_report.get("failed_files") or [])
     if failed_files:
+        lines.append("<details>")
+        lines.append(f"<summary>{len(failed_files)} failure(s)</summary>")
+        lines.append("")
         for item in failed_files:
             rel = item.get("file", "-")
             err = str(item.get("error", "")).strip()
@@ -123,24 +170,26 @@ def _build_markdown(
             lines.append("```text")
             lines.append(err if err else "(no error text)")
             lines.append("```")
+        lines.append("")
+        lines.append("</details>")
     else:
         lines.append("- (none)")
     lines.append("")
 
-    lines.append("## Collect Totals")
+    lines.append("## Collect Totals 📈")
     lines.append("")
-    lines.append(f"- ok: {totals['ok_count']}")
-    lines.append(f"- skipped: {totals['skipped_count']}")
-    lines.append(f"- failed: {totals['failed_count']}")
-    lines.append(f"- rows_before_total: {totals['rows_before_total']}")
-    lines.append(f"- rows_new_total: {totals['rows_new_total']}")
-    lines.append(f"- rows_after_total: {totals['rows_after_total']}")
-    lines.append(f"- deduped_total: {totals['deduped_total']}")
-    lines.append(f"- net_growth: {totals['net_growth']}")
+    lines.append(f"- ok: {_fmt_int(totals['ok_count'])}")
+    lines.append(f"- skipped: {_fmt_int(totals['skipped_count'])}")
+    lines.append(f"- failed: {_fmt_int(totals['failed_count'])}")
+    lines.append(f"- rows_before_total: {_fmt_int(totals['rows_before_total'])}")
+    lines.append(f"- rows_new_total: {_fmt_int(totals['rows_new_total'])}")
+    lines.append(f"- rows_after_total: {_fmt_int(totals['rows_after_total'])}")
+    lines.append(f"- deduped_total: {_fmt_int(totals['deduped_total'])}")
+    lines.append(f"- net_growth: {_fmt_int(totals['net_growth'])}")
     lines.append("")
 
     if ok:
-        lines.append("## Per Parquet Change")
+        lines.append("## Per Parquet Change 🧩")
         lines.append("")
         lines.append(
             "| symbol | tf | mode | before | new | after | deduped | delta | prev_last | new_first | new_last | after_last | overlap_rows | overlap_min |"
@@ -165,38 +214,43 @@ def _build_markdown(
                     after_last=item.get("after_last_ts_iso") or "-",
                     overlap_rows=int(item.get("overlap_rows", 0) or 0),
                     overlap_min=item.get("overlap_minutes", 0) or 0,
+                    )
                 )
-            )
         lines.append("")
 
-        lines.append("### Output Files")
+        lines.append("### 🗂️ Output Files")
+        lines.append("")
+        lines.append("<details>")
+        lines.append(f"<summary>{len(ok)} output file(s)</summary>")
         lines.append("")
         for item in ok:
-            lines.append(f"- `{item.get('file', '-')}`")
+            lines.append(f"- `{_short_path(item.get('file', '-'))}`")
+        lines.append("")
+        lines.append("</details>")
         lines.append("")
 
     if skipped:
-        lines.append("## Skipped")
+        lines.append("## Skipped ⏭️")
         lines.append("")
         for item in skipped:
             lines.append(f"- {item}")
         lines.append("")
 
     if failed:
-        lines.append("## Failed")
+        lines.append("## Failed ❌")
         lines.append("")
         for item in failed:
             lines.append(f"- {item}")
         lines.append("")
 
     if summary.get("error"):
-        lines.append("## Summary Error")
+        lines.append("## Summary Error 🚨")
         lines.append("")
         lines.append(f"- {summary['error']}")
         lines.append("")
 
     if pull_report.get("error"):
-        lines.append("## Pull Report Error")
+        lines.append("## Pull Report Error 🚨")
         lines.append("")
         lines.append(f"- {pull_report['error']}")
         lines.append("")
