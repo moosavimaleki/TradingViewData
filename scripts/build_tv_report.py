@@ -70,6 +70,8 @@ def _build_markdown(
 
     lines: List[str] = []
     lines.append("# tvdatafeed Collect Report")
+    if run_url and run_url != "-":
+        lines.append(f"Run: {run_url}")
     lines.append("")
     lines.append("## Run Context")
     lines.append("")
@@ -77,8 +79,6 @@ def _build_markdown(
     lines.append(f"- run_at_utc: {run_at_utc}")
     lines.append(f"- run_year: {run_year}")
     lines.append(f"- github_run_id: {run_id}")
-    if run_url and run_url != "-":
-        lines.append(f"- github_run_url: {run_url}")
     lines.append("")
 
     lines.append("## Drive Pull (Yearly Parquet Restore)")
