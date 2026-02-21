@@ -233,6 +233,7 @@ jobs:
             --run-year "$RUN_YEAR" \
             --run-date "$RUN_DATE_UTC" \
             --run-id "$GITHUB_RUN_ID" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --run-at-utc "$RUN_TS_UTC"
 
           echo "===== tvdatafeed_report.md ====="

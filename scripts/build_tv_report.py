@@ -61,6 +61,7 @@ def _build_markdown(
     run_year: str,
     run_date: str,
     run_id: str,
+    run_url: str,
     run_at_utc: str,
 ) -> str:
     ok = list(summary.get("ok") or [])
@@ -76,6 +77,8 @@ def _build_markdown(
     lines.append(f"- run_at_utc: {run_at_utc}")
     lines.append(f"- run_year: {run_year}")
     lines.append(f"- github_run_id: {run_id}")
+    if run_url and run_url != "-":
+        lines.append(f"- github_run_url: {run_url}")
     lines.append("")
 
     lines.append("## Drive Pull (Yearly Parquet Restore)")
@@ -203,6 +206,7 @@ def main() -> None:
     parser.add_argument("--run-year", default="")
     parser.add_argument("--run-date", default="")
     parser.add_argument("--run-id", default="")
+    parser.add_argument("--run-url", default="")
     parser.add_argument("--run-at-utc", default="")
     args = parser.parse_args()
 
@@ -236,6 +240,7 @@ def main() -> None:
     run_year = str(args.run_year).strip() or "-"
     run_date = str(args.run_date).strip() or "-"
     run_id = str(args.run_id).strip() or "-"
+    run_url = str(args.run_url).strip() or "-"
     run_at_utc = str(args.run_at_utc).strip() or "-"
 
     out_md.write_text(
@@ -246,6 +251,7 @@ def main() -> None:
             run_year=run_year,
             run_date=run_date,
             run_id=run_id,
+            run_url=run_url,
             run_at_utc=run_at_utc,
         ),
         encoding="utf-8",
