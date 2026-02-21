@@ -62,6 +62,8 @@ def _build_markdown(
     run_date: str,
     run_id: str,
     run_url: str,
+    run_artifacts_url: str,
+    run_artifact_url: str,
     run_at_utc: str,
 ) -> str:
     ok = list(summary.get("ok") or [])
@@ -72,6 +74,10 @@ def _build_markdown(
     lines.append("# tvdatafeed Collect Report")
     if run_url and run_url != "-":
         lines.append(f"Run: {run_url}")
+    if run_artifacts_url and run_artifacts_url != "-":
+        lines.append(f"Artifacts: {run_artifacts_url}")
+    if run_artifact_url and run_artifact_url != "-":
+        lines.append(f"Artifact Download: {run_artifact_url}")
     lines.append("")
     lines.append("## Run Context")
     lines.append("")
@@ -207,6 +213,8 @@ def main() -> None:
     parser.add_argument("--run-date", default="")
     parser.add_argument("--run-id", default="")
     parser.add_argument("--run-url", default="")
+    parser.add_argument("--run-artifacts-url", default="")
+    parser.add_argument("--run-artifact-url", default="")
     parser.add_argument("--run-at-utc", default="")
     args = parser.parse_args()
 
@@ -241,6 +249,8 @@ def main() -> None:
     run_date = str(args.run_date).strip() or "-"
     run_id = str(args.run_id).strip() or "-"
     run_url = str(args.run_url).strip() or "-"
+    run_artifacts_url = str(args.run_artifacts_url).strip() or "-"
+    run_artifact_url = str(args.run_artifact_url).strip() or "-"
     run_at_utc = str(args.run_at_utc).strip() or "-"
 
     out_md.write_text(
@@ -252,6 +262,8 @@ def main() -> None:
             run_date=run_date,
             run_id=run_id,
             run_url=run_url,
+            run_artifacts_url=run_artifacts_url,
+            run_artifact_url=run_artifact_url,
             run_at_utc=run_at_utc,
         ),
         encoding="utf-8",

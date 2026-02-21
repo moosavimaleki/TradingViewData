@@ -234,6 +234,8 @@ jobs:
             --run-date "$RUN_DATE_UTC" \
             --run-id "$GITHUB_RUN_ID" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --run-artifacts-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+            --run-artifact-url "-" \
             --run-at-utc "$RUN_TS_UTC"
 
           echo "===== tvdatafeed_report.md ====="
@@ -258,6 +260,47 @@ jobs:
             --include "**/${RUN_YEAR}.parquet" \
             --create-empty-src-dirs \
             -v
+
+      - name: Upload summary artifact
+        id: upload_summary
+        if: always() && env.RUN_MODE == 'major'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvdatafeed-summary-${{ env.RUN_STAMP_UTC }}
+          path: |
+            tvdatafeed_summary.json
+            tvdatafeed_pull.json
+            tvdatafeed_report.md
+          if-no-files-found: ignore
+
+      - name: Enrich report with direct artifact link (major only)
+        if: always() && env.RUN_MODE == 'major'
+        run: |
+          set -euo pipefail
+          if [ ! -f tvdatafeed_report.md ]; then
+            echo "tvdatafeed_report.md not found. Skipping enrich."
+            exit 0
+          fi
+
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          ARTIFACTS_URL="${RUN_URL}/artifacts"
+          ARTIFACT_ID="${{ steps.upload_summary.outputs.artifact-id }}"
+          ARTIFACT_URL="-"
+          if [ -n "${ARTIFACT_ID:-}" ]; then
+            ARTIFACT_URL="${RUN_URL}/artifacts/${ARTIFACT_ID}"
+          fi
+
+          python scripts/build_tv_report.py \
+            --summary tvdatafeed_summary.json \
+            --pull-json tvdatafeed_pull.json \
+            --out-md tvdatafeed_report.md \
+            --run-year "$RUN_YEAR" \
+            --run-date "$RUN_DATE_UTC" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$RUN_URL" \
+            --run-artifacts-url "$ARTIFACTS_URL" \
+            --run-artifact-url "$ARTIFACT_URL" \
+            --run-at-utc "$RUN_TS_UTC"
 
       - name: Commit report artifacts to repository (major only)
         if: always() && env.RUN_MODE == 'major'
@@ -294,14 +337,3 @@ jobs:
             fi
             sleep 3
           done
-
-      - name: Upload summary artifact
-        if: always() && env.RUN_MODE == 'major'
-        uses: actions/upload-artifact@v4
-        with:
-          name: tvdatafeed-summary-${{ env.RUN_STAMP_UTC }}
-          path: |
-            tvdatafeed_summary.json
-            tvdatafeed_pull.json
-            tvdatafeed_report.md
-          if-no-files-found: ignore
