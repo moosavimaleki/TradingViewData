@@ -66,9 +66,18 @@ def _fmt_ts_cell(value: Any) -> str:
     return f"`{raw}`"
 
 
-def _fmt_symbol_broker_lower(value: Any) -> str:
-    text = str(value or "-").strip()
-    return text.lower() if text else "-"
+def _fmt_symbol_broker_footnote(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "-"
+    if ":" not in text:
+        return f"`{text}`"
+    symbol, broker = text.split(":", 1)
+    symbol = symbol.strip() or "-"
+    broker = broker.strip()
+    if not broker:
+        return f"`{symbol}`"
+    return f"`{symbol}`<br><sub>{broker.lower()}</sub>"
 
 
 def _short_path(path: str) -> str:
@@ -236,7 +245,7 @@ def _build_markdown(
         lines.append("## Per Parquet Change 🧩")
         lines.append("")
         lines.append(
-            "| symbol:broker (lower) | tf | added | overridden (overlap) | mode | before | fetched | after | overlap_rows | overlap_min | prev_last | new_first | new_last | after_last |"
+            "| symbol + broker | tf | added | overridden (overlap) | mode | before | fetched | after | overlap_rows | overlap_min | prev_last | new_first | new_last | after_last |"
         )
         lines.append("|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|---|---|---|")
         for item in ok:
@@ -247,7 +256,7 @@ def _build_markdown(
             added = after - before
             lines.append(
                 "| {symbol} | {tf} | {added} | {overridden} | {mode} | {before} | {fetched} | {after} | {overlap_rows} | {overlap_min} | {prev_last} | {new_first} | {new_last} | {after_last} |".format(
-                    symbol=_fmt_symbol_broker_lower(item.get("symbol", "")),
+                    symbol=_fmt_symbol_broker_footnote(item.get("symbol", "")),
                     tf=item.get("timeframe", ""),
                     added=added,
                     overridden=overridden,
