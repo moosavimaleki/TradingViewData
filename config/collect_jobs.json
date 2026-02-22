@@ -11,7 +11,7 @@
       "symbol": "XAUUSD",
       "broker": "BLACKBULL",
       "timeframe": "1m",
-      "note": "Main hCAPITALCOMh-frequency stream"
+      "note": "Main high-frequency stream"
     },
     {
       "enabled": true,
@@ -418,7 +418,7 @@
       "symbol": "XAUUSD",
       "broker": "FOREXCOM",
       "timeframe": "1m",
-      "note": "Enable only if FARAZ_COOKIES secret is confCAPITALCOMured"
+      "note": "Enable only if FARAZ_COOKIES secret is configured"
     },
     {
       "enabled": true,
@@ -620,28 +620,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "US100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -676,28 +676,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -732,28 +732,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "US30",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US30",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US30",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US30",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -788,28 +788,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "GER40",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GER40",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GER40",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GER40",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -844,28 +844,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "UK100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UK100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UK100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UK100",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -900,28 +900,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "VIX",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "VIX",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "VIX",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "VIX",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -984,28 +984,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAUUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAUUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAUUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAUUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1040,28 +1040,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAGUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAGUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAGUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "XAGUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1096,28 +1096,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "USOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "USOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "USOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "USOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1152,28 +1152,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "UKOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UKOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UKOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "UKOIL",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1202,6 +1202,146 @@
       "source": "tradingview",
       "symbol": "UKOIL",
       "broker": "BlackBull",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "IG",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "IG",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "IG",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "IG",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "OANDA",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "OANDA",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "OANDA",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NATGAS",
+      "broker": "OANDA",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "BlackBull",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "BlackBull",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "BlackBull",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "BlackBull",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "IG",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "IG",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "IG",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XCUUSD",
+      "broker": "IG",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US10Y",
+      "broker": "CMC Markets",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US10Y",
+      "broker": "CMC Markets",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US10Y",
+      "broker": "CMC Markets",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US10Y",
+      "broker": "CMC Markets",
       "timeframe": "1000R"
     },
     {
@@ -1292,28 +1432,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "GBPUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GBPUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GBPUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GBPUSD",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1544,28 +1684,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "MYM1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "MYM1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "MYM1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "MYM1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1000R"
     },
     {
@@ -1628,28 +1768,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "ES1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "ES1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "ES1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "ES1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1000R"
     },
     {
@@ -1712,28 +1852,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "NQ1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "NQ1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "NQ1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "NQ1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1000R"
     },
     {
@@ -1768,28 +1908,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "GC1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GC1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GC1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "GC1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1000R"
     },
     {
@@ -1824,56 +1964,56 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "SI1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "SI1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "SI1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "SI1!",
-      "broker": "CAPITALCOM (Futures Account)",
+      "broker": "IG (Futures Account)",
       "timeframe": "1000R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DXY",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DXY",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DXY",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DXY",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
@@ -1964,28 +2104,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "DJI",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DJI",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DJI",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "DJI",
-      "broker": "CAPITALCOM",
+      "broker": "IG",
       "timeframe": "1000R"
     },
     {
