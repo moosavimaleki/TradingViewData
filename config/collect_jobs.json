@@ -273,12 +273,348 @@
       "timeframe": "1000R"
     },
     {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BNBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BNBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BNBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "BNBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XRPUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XRPUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XRPUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "XRPUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SOLUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SOLUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SOLUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SOLUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "ADAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "ADAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "ADAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "ADAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DOGEUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DOGEUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DOGEUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "DOGEUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
       "enabled": false,
       "source": "faraz",
       "symbol": "XAUUSD",
       "broker": "FOREXCOM",
       "timeframe": "1m",
       "note": "Enable only if FARAZ_COOKIES secret is configured"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDJPY",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDJPY",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDJPY",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDJPY",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "GBPUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "GBPUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "GBPUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "GBPUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDCHF",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDCHF",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDCHF",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "USDCHF",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "AUDUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "AUDUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "AUDUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "AUDUSD",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "LUNAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "LUNAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "LUNAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "LUNAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SHIBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SHIBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SHIBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "SHIBUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "MANAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "MANAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "MANAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "MANAUSDT",
+      "broker": "BINANCE",
+      "timeframe": "1000R"
     }
   ]
 }
