@@ -1,0 +1,30 @@
+{
+  "maps": [
+    {
+      "faraz": {
+        "symbol": "XAUUSD",
+        "broker": "FXCM",
+        "timeframe": "1h"
+      },
+      "target": {
+        "source": "tradingview",
+        "symbol": "XAUUSD",
+        "broker": "BLACKBULL",
+        "timeframe": "1h"
+      }
+    },
+    {
+      "faraz": {
+        "symbol": "EURUSD",
+        "broker": "FOREXCOM",
+        "timeframe": "15m"
+      },
+      "target": {
+        "source": "tradingview",
+        "symbol": "EURUSD",
+        "broker": "BLACKBULL",
+        "timeframe": "15m"
+      }
+    }
+  ]
+}
