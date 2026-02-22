@@ -22,15 +22,6 @@
 - هر ۳ ساعت: اجرای `minor` (فقط تایم‌فریم‌های رنج: `10R`, `100R`, `1000R`)
 - هر ۶ ساعت: اجرای `major` (همه تایم‌فریم‌ها + گزارش کامل)
 
-## 🧱 Faraz Backfill
-
-- بک‌فیل خام از روی `config/collect_jobs.json`:
-  - `python backfill/faraz/backfill_from_jobs.py --config config/collect_jobs.json --data-root data --faraz-brokers FXCM,FOREXCOM,OANDA --start 2017-01-01T00:00:00Z`
-- prepend کردن دیتای Faraz قبل از دیتای TradingView با map config:
-  - `python backfill/faraz/prepend_from_faraz.py --map-config config/backfill_prepend_maps.json --data-root data`
-- فایل نمونه map:
-  - `config/backfill_prepend_maps.example.json`
-
 <!-- RUN_TABLE_START -->
 ## 🕒 آخرین اجراها
 
