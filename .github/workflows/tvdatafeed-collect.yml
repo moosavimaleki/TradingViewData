@@ -236,7 +236,12 @@ jobs:
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --run-artifacts-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
             --run-artifact-url "-" \
-            --run-at-utc "$RUN_TS_UTC"
+            --run-at-utc "$RUN_TS_UTC" \
+            --run-mode "$RUN_MODE" \
+            --run-event-name "$RUN_EVENT_NAME" \
+            --run-event-schedule "$RUN_EVENT_SCHEDULE" \
+            --run-hour-utc "$RUN_HOUR_UTC" \
+            --run-config-path "$EFFECTIVE_CONFIG_PATH"
 
           echo "===== tvdatafeed_report.md ====="
           sed -n '1,220p' tvdatafeed_report.md
@@ -304,7 +309,12 @@ jobs:
             --run-url "$RUN_URL" \
             --run-artifacts-url "$ARTIFACTS_URL" \
             --run-artifact-url "$ARTIFACT_URL" \
-            --run-at-utc "$RUN_TS_UTC"
+            --run-at-utc "$RUN_TS_UTC" \
+            --run-mode "$RUN_MODE" \
+            --run-event-name "$RUN_EVENT_NAME" \
+            --run-event-schedule "$RUN_EVENT_SCHEDULE" \
+            --run-hour-utc "$RUN_HOUR_UTC" \
+            --run-config-path "$EFFECTIVE_CONFIG_PATH"
 
           grep -q "Run:" tvdatafeed_report.md
           grep -q "Artifacts:" tvdatafeed_report.md

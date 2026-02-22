@@ -106,16 +106,34 @@ def _collect_rows(reports_dir: Path, limit: int) -> List[ReportRow]:
 
 def _build_table(rows: List[ReportRow], repo_base_url: str) -> str:
     base = repo_base_url.rstrip("/")
+
+    def status_badge(status: str) -> str:
+        value = (status or "").strip().lower()
+        if value == "success":
+            return "✅ `success`"
+        if value == "failed":
+            return "❌ `failed`"
+        return "❔ `unknown`"
+
+    def split_utc(ts: str) -> str:
+        raw = (ts or "-").strip()
+        if raw == "-" or not raw:
+            return "-"
+        if "T" in raw:
+            d, t = raw.split("T", 1)
+            return f"`{d}`<br>`{t}`"
+        return f"`{raw}`"
+
     lines: List[str] = []
-    lines.append("## آخرین اجراها")
+    lines.append("## 🕒 آخرین اجراها")
     lines.append("")
-    lines.append("| لینک گزارش | وضعیت اجرا | زمان اجرا (UTC) |")
+    lines.append("| گزارش | وضعیت | زمان اجرا (UTC) |")
     lines.append("|---|---|---|")
     for row in rows:
         url = f"{base}/blob/main/{row.rel_path}"
-        lines.append(f"| [{row.filename}]({url}) | {row.status} | {row.run_at_utc} |")
+        lines.append(f"| 📄 [{row.filename}]({url}) | {status_badge(row.status)} | {split_utc(row.run_at_utc)} |")
     if not rows:
-        lines.append("| - | unknown | - |")
+        lines.append("| - | ❔ `unknown` | - |")
     lines.append("")
     return "\n".join(lines)
 

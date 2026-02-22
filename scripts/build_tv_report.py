@@ -46,6 +46,31 @@ def _fmt_int(value: Any) -> str:
         return "0"
 
 
+def _as_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
+def _fmt_ts_cell(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw or raw == "-":
+        return "-"
+    if "T" in raw:
+        date_part, time_part = raw.split("T", 1)
+        return f"`{date_part}`<br>`{time_part}`"
+    if " " in raw:
+        date_part, time_part = raw.split(" ", 1)
+        return f"`{date_part}`<br>`{time_part}`"
+    return f"`{raw}`"
+
+
+def _fmt_symbol_broker_lower(value: Any) -> str:
+    text = str(value or "-").strip()
+    return text.lower() if text else "-"
+
+
 def _short_path(path: str) -> str:
     text = str(path or "-")
     prefixes = (
@@ -103,6 +128,11 @@ def _build_markdown(
     run_artifacts_url: str,
     run_artifact_url: str,
     run_at_utc: str,
+    run_mode: str,
+    run_event_name: str,
+    run_event_schedule: str,
+    run_hour_utc: str,
+    run_config_path: str,
 ) -> str:
     ok = list(summary.get("ok") or [])
     skipped = list(summary.get("skipped") or [])
@@ -129,6 +159,20 @@ def _build_markdown(
     lines.append(f"- run_at_utc: {run_at_utc}")
     lines.append(f"- run_year: {run_year}")
     lines.append(f"- github_run_id: {run_id}")
+    lines.append("")
+    lines.append("## Run Resolution 🕹️")
+    lines.append("")
+    lines.append(
+        "- `{}`".format(
+            "Resolved RUN_MODE={mode} EVENT_NAME={event} EVENT_SCHEDULE={schedule} RUN_HOUR_UTC={hour} config={config}".format(
+                mode=run_mode,
+                event=run_event_name,
+                schedule=run_event_schedule,
+                hour=run_hour_utc,
+                config=run_config_path,
+            )
+        )
+    )
     lines.append("")
 
     lines.append("## Drive Pull ☁️ (Yearly Parquet Restore)")
@@ -192,30 +236,33 @@ def _build_markdown(
         lines.append("## Per Parquet Change 🧩")
         lines.append("")
         lines.append(
-            "| symbol | tf | mode | before | new | after | deduped | delta | prev_last | new_first | new_last | after_last | overlap_rows | overlap_min |"
+            "| symbol:broker (lower) | tf | added | overridden (overlap) | mode | before | fetched | after | overlap_rows | overlap_min | prev_last | new_first | new_last | after_last |"
         )
-        lines.append("|---|---|---|---:|---:|---:|---:|---:|---|---|---|---|---:|---:|")
+        lines.append("|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|---|---|---|")
         for item in ok:
-            before = int(item.get("rows_before", 0) or 0)
-            after = int(item.get("rows_after", 0) or 0)
+            before = _as_int(item.get("rows_before", 0))
+            after = _as_int(item.get("rows_after", 0))
+            fetched = _as_int(item.get("fetched_rows", 0))
+            overridden = _as_int(item.get("deduped", 0))
+            added = after - before
             lines.append(
-                "| {symbol} | {tf} | {mode} | {before} | {new} | {after} | {deduped} | {delta} | {prev_last} | {new_first} | {new_last} | {after_last} | {overlap_rows} | {overlap_min} |".format(
-                    symbol=item.get("symbol", ""),
+                "| {symbol} | {tf} | {added} | {overridden} | {mode} | {before} | {fetched} | {after} | {overlap_rows} | {overlap_min} | {prev_last} | {new_first} | {new_last} | {after_last} |".format(
+                    symbol=_fmt_symbol_broker_lower(item.get("symbol", "")),
                     tf=item.get("timeframe", ""),
+                    added=added,
+                    overridden=overridden,
                     mode=item.get("mode", ""),
                     before=before,
-                    new=int(item.get("fetched_rows", 0) or 0),
+                    fetched=fetched,
                     after=after,
-                    deduped=int(item.get("deduped", 0) or 0),
-                    delta=after - before,
-                    prev_last=item.get("before_last_ts_iso") or "-",
-                    new_first=item.get("fetched_first_ts_iso") or "-",
-                    new_last=item.get("fetched_last_ts_iso") or "-",
-                    after_last=item.get("after_last_ts_iso") or "-",
-                    overlap_rows=int(item.get("overlap_rows", 0) or 0),
+                    prev_last=_fmt_ts_cell(item.get("before_last_ts_iso")),
+                    new_first=_fmt_ts_cell(item.get("fetched_first_ts_iso")),
+                    new_last=_fmt_ts_cell(item.get("fetched_last_ts_iso")),
+                    after_last=_fmt_ts_cell(item.get("after_last_ts_iso")),
+                    overlap_rows=_as_int(item.get("overlap_rows", 0)),
                     overlap_min=item.get("overlap_minutes", 0) or 0,
-                    )
                 )
+            )
         lines.append("")
 
         lines.append("### 🗂️ Output Files")
@@ -270,6 +317,11 @@ def main() -> None:
     parser.add_argument("--run-artifacts-url", default="")
     parser.add_argument("--run-artifact-url", default="")
     parser.add_argument("--run-at-utc", default="")
+    parser.add_argument("--run-mode", default="")
+    parser.add_argument("--run-event-name", default="")
+    parser.add_argument("--run-event-schedule", default="")
+    parser.add_argument("--run-hour-utc", default="")
+    parser.add_argument("--run-config-path", default="")
     args = parser.parse_args()
 
     summary_path = Path(args.summary).resolve()
@@ -306,6 +358,11 @@ def main() -> None:
     run_artifacts_url = str(args.run_artifacts_url).strip() or "-"
     run_artifact_url = str(args.run_artifact_url).strip() or "-"
     run_at_utc = str(args.run_at_utc).strip() or "-"
+    run_mode = str(args.run_mode).strip() or "-"
+    run_event_name = str(args.run_event_name).strip() or "-"
+    run_event_schedule = str(args.run_event_schedule).strip() or "-"
+    run_hour_utc = str(args.run_hour_utc).strip() or "-"
+    run_config_path = str(args.run_config_path).strip() or "-"
 
     out_md.write_text(
         _build_markdown(
@@ -319,6 +376,11 @@ def main() -> None:
             run_artifacts_url=run_artifacts_url,
             run_artifact_url=run_artifact_url,
             run_at_utc=run_at_utc,
+            run_mode=run_mode,
+            run_event_name=run_event_name,
+            run_event_schedule=run_event_schedule,
+            run_hour_utc=run_hour_utc,
+            run_config_path=run_config_path,
         ),
         encoding="utf-8",
     )
