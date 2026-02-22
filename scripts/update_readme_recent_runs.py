@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 RUN_TABLE_START = "<!-- RUN_TABLE_START -->"
 RUN_TABLE_END = "<!-- RUN_TABLE_END -->"
@@ -115,23 +116,30 @@ def _build_table(rows: List[ReportRow], repo_base_url: str) -> str:
             return "❌ `failed`"
         return "❔ `unknown`"
 
-    def split_utc(ts: str) -> str:
+    def to_tehran(ts: str) -> str:
         raw = (ts or "-").strip()
         if raw == "-" or not raw:
             return "-"
-        if "T" in raw:
-            d, t = raw.split("T", 1)
-            return f"`{d}`<br>`{t}`"
-        return f"`{raw}`"
+        try:
+            dt_utc = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt_utc.tzinfo is None:
+                dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+            dt_tehran = dt_utc.astimezone(ZoneInfo("Asia/Tehran"))
+            return f"`{dt_tehran.strftime('%Y-%m-%d')}` `{dt_tehran.strftime('%H:%M:%S')}`"
+        except Exception:
+            if "T" in raw:
+                d, t = raw.split("T", 1)
+                return f"`{d}` `{t}`"
+            return f"`{raw}`"
 
     lines: List[str] = []
     lines.append("## 🕒 آخرین اجراها")
     lines.append("")
-    lines.append("| گزارش | وضعیت | زمان اجرا (UTC) |")
+    lines.append("| گزارش | وضعیت | زمان اجرا (تهران) |")
     lines.append("|---|---|---|")
     for row in rows:
         url = f"{base}/blob/main/{row.rel_path}"
-        lines.append(f"| 📄 [{row.filename}]({url}) | {status_badge(row.status)} | {split_utc(row.run_at_utc)} |")
+        lines.append(f"| 📄 [{row.filename}]({url}) | {status_badge(row.status)} | {to_tehran(row.run_at_utc)} |")
     if not rows:
         lines.append("| - | ❔ `unknown` | - |")
     lines.append("")

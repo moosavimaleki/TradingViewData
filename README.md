@@ -22,20 +22,29 @@
 - هر ۳ ساعت: اجرای `minor` (فقط تایم‌فریم‌های رنج: `10R`, `100R`, `1000R`)
 - هر ۶ ساعت: اجرای `major` (همه تایم‌فریم‌ها + گزارش کامل)
 
+## 🧱 Faraz Backfill
+
+- بک‌فیل خام از روی `config/collect_jobs.json`:
+  - `python backfill/faraz/backfill_from_jobs.py --config config/collect_jobs.json --data-root data --faraz-brokers FXCM,FOREXCOM,OANDA --start 2017-01-01T00:00:00Z`
+- prepend کردن دیتای Faraz قبل از دیتای TradingView با map config:
+  - `python backfill/faraz/prepend_from_faraz.py --map-config config/backfill_prepend_maps.json --data-root data`
+- فایل نمونه map:
+  - `config/backfill_prepend_maps.example.json`
+
 <!-- RUN_TABLE_START -->
 ## 🕒 آخرین اجراها
 
-| گزارش | وضعیت | زمان اجرا (UTC) |
+| گزارش | وضعیت | زمان اجرا (تهران) |
 |---|---|---|
-| 📄 [2026-02-22T02-49-42Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-49-42Z.md) | ✅ `success` | `2026-02-22`<br>`02:49:42Z` |
-| 📄 [2026-02-22T02-38-14Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-38-14Z.md) | ✅ `success` | `2026-02-22`<br>`02:38:14Z` |
-| 📄 [2026-02-21T18-47-11Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T18-47-11Z.md) | ✅ `success` | `2026-02-21`<br>`18:47:11Z` |
-| 📄 [2026-02-21T13-04-00Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T13-04-00Z.md) | ✅ `success` | `2026-02-21`<br>`13:04:00Z` |
-| 📄 [2026-02-21T11-34-51Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T11-34-51Z.md) | ✅ `success` | `2026-02-21`<br>`11:34:51Z` |
-| 📄 [2026-02-21T06-53-47Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T06-53-47Z.md) | ✅ `success` | `2026-02-21`<br>`06:53:47Z` |
-| 📄 [2026-02-21T04-04-22Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T04-04-22Z.md) | ✅ `success` | `2026-02-21`<br>`04:04:22Z` |
-| 📄 [2026-02-20T18-31-14Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20T18-31-14Z.md) | ✅ `success` | `2026-02-20`<br>`18:31:14Z` |
-| 📄 [2026-02-20T17-08-16Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20T17-08-16Z.md) | ✅ `success` | `2026-02-20`<br>`17:08:16Z` |
-| 📄 [2026-02-20.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20.md) | ❌ `failed` | `2026-02-20`<br>`16:36:34Z` |
+| 📄 [2026-02-22T02-49-42Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-49-42Z.md) | ✅ `success` | `2026-02-22` `06:19:42` |
+| 📄 [2026-02-22T02-38-14Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-38-14Z.md) | ✅ `success` | `2026-02-22` `06:08:14` |
+| 📄 [2026-02-21T18-47-11Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T18-47-11Z.md) | ✅ `success` | `2026-02-21` `22:17:11` |
+| 📄 [2026-02-21T13-04-00Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T13-04-00Z.md) | ✅ `success` | `2026-02-21` `16:34:00` |
+| 📄 [2026-02-21T11-34-51Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T11-34-51Z.md) | ✅ `success` | `2026-02-21` `15:04:51` |
+| 📄 [2026-02-21T06-53-47Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T06-53-47Z.md) | ✅ `success` | `2026-02-21` `10:23:47` |
+| 📄 [2026-02-21T04-04-22Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T04-04-22Z.md) | ✅ `success` | `2026-02-21` `07:34:22` |
+| 📄 [2026-02-20T18-31-14Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20T18-31-14Z.md) | ✅ `success` | `2026-02-20` `22:01:14` |
+| 📄 [2026-02-20T17-08-16Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20T17-08-16Z.md) | ✅ `success` | `2026-02-20` `20:38:16` |
+| 📄 [2026-02-20.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-20.md) | ❌ `failed` | `2026-02-20` `20:06:34` |
 
 <!-- RUN_TABLE_END -->
