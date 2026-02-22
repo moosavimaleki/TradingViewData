@@ -27,6 +27,7 @@
 
 | گزارش | وضعیت | زمان اجرا (UTC) |
 |---|---|---|
+| 📄 [2026-02-22T02-49-42Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-49-42Z.md) | ✅ `success` | `2026-02-22`<br>`02:49:42Z` |
 | 📄 [2026-02-22T02-38-14Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-22T02-38-14Z.md) | ✅ `success` | `2026-02-22`<br>`02:38:14Z` |
 | 📄 [2026-02-21T18-47-11Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T18-47-11Z.md) | ✅ `success` | `2026-02-21`<br>`18:47:11Z` |
 | 📄 [2026-02-21T13-04-00Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-02-21T13-04-00Z.md) | ✅ `success` | `2026-02-21`<br>`13:04:00Z` |
