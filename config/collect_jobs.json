@@ -783,6 +783,6 @@
       "symbol": "US500",
       "broker": "BLACKBULL",
       "timeframe": "1000R"
-    },
+    }
   ]
 }
