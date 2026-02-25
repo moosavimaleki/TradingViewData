@@ -15,10 +15,20 @@ on:
         description: "Comma-separated Faraz brokers"
         required: true
         default: "FOREXCOM,FXCM"
-      start:
-        description: "Backfill start (UTC ISO8601)"
+      log_level:
+        description: "Faraz backfill log level"
         required: true
-        default: "2017-01-01T00:00:00Z"
+        type: choice
+        options:
+          - "DEBUG"
+          - "INFO"
+          - "WARNING"
+          - "ERROR"
+        default: "DEBUG"
+      start:
+        description: "Backfill start (UTC ISO8601, optional; blank => fetch until Faraz history ends)"
+        required: false
+        default: ""
       end:
         description: "Backfill end (UTC ISO8601, optional)"
         required: false
@@ -114,7 +124,8 @@ jobs:
           set -euo pipefail
           DATA_ROOT="${{ github.event.inputs.data_root }}"
           mkdir -p "$DATA_ROOT/faraz"
-          rclone copy "${RCLONE_REMOTE_PATH%/}/data/faraz" "$DATA_ROOT/faraz" -v || true
+          echo "Pulling existing Faraz data from ${RCLONE_REMOTE_PATH%/}/data/faraz -> $DATA_ROOT/faraz"
+          rclone copy "${RCLONE_REMOTE_PATH%/}/data/faraz" "$DATA_ROOT/faraz" -P --stats 15s -v || true
 
       - name: Run Faraz backfill (all non-range timeframes in collect_jobs)
         env:
@@ -130,15 +141,26 @@ jobs:
           CONFIG_PATH="${{ github.event.inputs.config_path }}"
           DATA_ROOT="${{ github.event.inputs.data_root }}"
           FARAZ_BROKERS="${{ github.event.inputs.faraz_brokers }}"
+          LOG_LEVEL="${{ github.event.inputs.log_level }}"
           START_AT="${{ github.event.inputs.start }}"
           END_AT="${{ github.event.inputs.end }}"
+
+          echo "CONFIG_PATH=$CONFIG_PATH"
+          echo "DATA_ROOT=$DATA_ROOT"
+          echo "FARAZ_BROKERS=$FARAZ_BROKERS"
+          echo "LOG_LEVEL=$LOG_LEVEL"
+          echo "START_AT=${START_AT:-<blank => epoch>}"
+          echo "END_AT=${END_AT:-<blank => now>}"
 
           CMD=(python backfill/faraz/backfill_from_jobs.py
             --config "$CONFIG_PATH"
             --data-root "$DATA_ROOT"
             --faraz-brokers "$FARAZ_BROKERS"
-            --start "$START_AT"
+            --log-level "$LOG_LEVEL"
           )
+          if [ -n "$START_AT" ]; then
+            CMD+=(--start "$START_AT")
+          fi
           if [ -n "$END_AT" ]; then
             CMD+=(--end "$END_AT")
           fi
@@ -155,8 +177,10 @@ jobs:
             echo "::error::No local faraz directory found at $DATA_ROOT/faraz"
             exit 1
           fi
+          echo "Pushing $DATA_ROOT/faraz -> ${RCLONE_REMOTE_PATH%/}/data/faraz"
           rclone copy "$DATA_ROOT/faraz" "${RCLONE_REMOTE_PATH%/}/data/faraz" \
             --create-empty-src-dirs \
+            -P --stats 15s \
             -v
 
       - name: Upload run artifacts

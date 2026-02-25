@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from typing import Dict, Optional
 
 import pandas as pd
 import requests
+
+logger = logging.getLogger("backfill.faraz.client")
 
 TIMEFRAME_TO_RESOLUTION: Dict[str, str] = {
     "1m": "1",
@@ -207,6 +210,16 @@ class FarazClient:
         chunks = []
         while pages < self.max_pages:
             countback = self.first_page_countback if first_request else self.page_countback
+            logger.debug(
+                "Faraz page request symbol=%s broker=%s tf=%s page=%s to=%s countback=%s first=%s",
+                symbol,
+                broker,
+                tf,
+                pages + 1,
+                current_to,
+                countback,
+                first_request,
+            )
             payload = self._fetch_page(
                 symbol_name=symbol_name,
                 resolution=resolution,
@@ -218,6 +231,7 @@ class FarazClient:
             result = payload.get("result") or {}
             times = list(result.get("t") or [])
             if not times:
+                logger.debug("Faraz page empty symbol=%s broker=%s tf=%s page=%s", symbol, broker, tf, pages + 1)
                 break
 
             df = pd.DataFrame(
@@ -232,9 +246,26 @@ class FarazClient:
             )
             df = df.dropna(subset=["ts", "open", "high", "low", "close"])
             if df.empty:
+                logger.debug(
+                    "Faraz page parsed empty symbol=%s broker=%s tf=%s page=%s",
+                    symbol,
+                    broker,
+                    tf,
+                    pages + 1,
+                )
                 break
             chunks.append(df)
             pages += 1
+            logger.debug(
+                "Faraz page ok symbol=%s broker=%s tf=%s page=%s rows=%s ts_min=%s ts_max=%s",
+                symbol,
+                broker,
+                tf,
+                pages,
+                len(df),
+                int(df["ts"].min()),
+                int(df["ts"].max()),
+            )
 
             min_ts = int(df["ts"].min())
             if previous_min_ts is not None and min_ts >= previous_min_ts:

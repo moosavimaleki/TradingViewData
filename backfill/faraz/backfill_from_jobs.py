@@ -30,7 +30,7 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Backfill historical candles from Faraz using collect_jobs.json")
     p.add_argument("--config", default="config/collect_jobs.json")
     p.add_argument("--data-root", default="data")
-    p.add_argument("--start", default="2017-01-01T00:00:00Z")
+    p.add_argument("--start", default="")
     p.add_argument("--end", default="")
     p.add_argument("--faraz-brokers", default="FXCM,FOREXCOM,OANDA")
     p.add_argument("--base-url", default=os.getenv("FARAZ_BASE_URL", "https://ir2.faraz.io/api/customer/trading-view/history"))
@@ -74,7 +74,12 @@ def main() -> None:
 
     config_path = Path(args.config).resolve()
     data_root = Path(args.data_root).resolve()
-    start_dt = _parse_iso_utc(args.start)
+    if str(args.start).strip():
+        start_dt = _parse_iso_utc(args.start)
+    else:
+        # Blank start means \"fetch as far back as the API can provide\".
+        # Use Unix epoch (0) instead of a negative timestamp to avoid API edge cases.
+        start_dt = datetime(1970, 1, 1, tzinfo=timezone.utc)
     end_dt = _parse_iso_utc(args.end) if str(args.end).strip() else datetime.now(timezone.utc)
 
     client = FarazClient(
@@ -87,13 +92,38 @@ def main() -> None:
     jobs = load_jobs(config_path)
     summary = {"ok": [], "skipped": [], "failed": []}
     seen = set()
+    logger.info(
+        "Starting Faraz backfill config=%s data_root=%s start=%s end=%s faraz_brokers=%s total_jobs=%s",
+        config_path,
+        data_root,
+        start_dt.isoformat(),
+        end_dt.isoformat(),
+        faraz_brokers,
+        len(jobs),
+    )
+
+    progress_total = len(jobs)
+    progress_idx = 0
 
     for job in jobs:
+        progress_idx += 1
+        logger.info(
+            "[job %s/%s] source=%s symbol=%s broker=%s timeframe=%s enabled=%s",
+            progress_idx,
+            progress_total,
+            getattr(job, "source", None),
+            getattr(job, "symbol", None),
+            getattr(job, "broker", None),
+            getattr(job, "timeframe", None),
+            getattr(job, "enabled", None),
+        )
         if str(job.source).strip().lower() not in {"tradingview", "tv"}:
+            logger.info("  skip: non-tradingview source=%s", job.source)
             continue
 
         tf = normalize_timeframe(job.timeframe)
         if is_range_timeframe(tf):
+            logger.info("  skip: range timeframe not supported by Faraz tf=%s", tf)
             summary["skipped"].append(
                 {"symbol": job.symbol, "timeframe": tf, "reason": "range timeframe is not supported by Faraz"}
             )
@@ -101,7 +131,9 @@ def main() -> None:
 
         try:
             symbol, _ = resolve_symbol_exchange(job)
+            logger.info("  normalized symbol=%s tf=%s", symbol, tf)
         except Exception as exc:
+            logger.exception("  resolve_symbol_exchange failed symbol=%s tf=%s", job.symbol, tf)
             summary["failed"].append({"symbol": job.symbol, "timeframe": tf, "error": f"resolve_error: {exc}"})
             continue
 
@@ -109,10 +141,24 @@ def main() -> None:
             storage_broker = storage_broker_for_symbol(symbol=symbol, requested_broker=faraz_broker)
             key = (symbol.upper(), tf, storage_broker)
             if key in seen:
+                logger.info(
+                    "  skip duplicate effective target symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
+                    symbol,
+                    tf,
+                    faraz_broker,
+                    storage_broker,
+                )
                 continue
             seen.add(key)
 
             try:
+                logger.info(
+                    "  fetch start symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
+                    symbol,
+                    tf,
+                    faraz_broker,
+                    storage_broker,
+                )
                 df, stats = client.fetch_history(
                     symbol=symbol,
                     broker=faraz_broker,
@@ -121,6 +167,13 @@ def main() -> None:
                     end_dt=end_dt,
                 )
                 if df.empty:
+                    logger.info(
+                        "  skip no rows symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
+                        symbol,
+                        tf,
+                        faraz_broker,
+                        storage_broker,
+                    )
                     summary["skipped"].append(
                         {"symbol": symbol, "broker": faraz_broker, "timeframe": tf, "reason": "no rows returned"}
                     )
@@ -137,8 +190,31 @@ def main() -> None:
                         year=year,
                     )
                     merge_stats = merge_parquet(path, part)
+                    logger.info(
+                        "  file merged symbol=%s tf=%s year=%s faraz_broker=%s storage_broker=%s added=%s deduped=%s after=%s path=%s",
+                        symbol,
+                        tf,
+                        year,
+                        faraz_broker,
+                        storage_broker,
+                        merge_stats.get("added"),
+                        merge_stats.get("deduped"),
+                        merge_stats.get("after"),
+                        path,
+                    )
                     file_stats.append({"year": int(year), "file": str(path), **merge_stats})
 
+                logger.info(
+                    "  fetch done symbol=%s tf=%s faraz_broker=%s storage_broker=%s rows=%s pages=%s first_ts=%s last_ts=%s",
+                    symbol,
+                    tf,
+                    faraz_broker,
+                    storage_broker,
+                    int(stats.rows),
+                    int(stats.pages),
+                    stats.first_ts,
+                    stats.last_ts,
+                )
                 summary["ok"].append(
                     {
                         "symbol": symbol,
@@ -153,6 +229,14 @@ def main() -> None:
                     }
                 )
             except UnsupportedFarazSymbolError as exc:
+                logger.info(
+                    "  skip unsupported symbol=%s tf=%s faraz_broker=%s storage_broker=%s reason=%s",
+                    symbol,
+                    tf,
+                    faraz_broker,
+                    storage_broker,
+                    exc,
+                )
                 summary["skipped"].append(
                     {
                         "symbol": symbol,
@@ -163,6 +247,13 @@ def main() -> None:
                     }
                 )
             except Exception as exc:  # pragma: no cover
+                logger.exception(
+                    "  fetch failed symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
+                    symbol,
+                    tf,
+                    faraz_broker,
+                    storage_broker,
+                )
                 summary["failed"].append(
                     {
                         "symbol": symbol,
@@ -173,6 +264,12 @@ def main() -> None:
                     }
                 )
 
+    logger.info(
+        "Faraz backfill finished ok=%s skipped=%s failed=%s",
+        len(summary["ok"]),
+        len(summary["skipped"]),
+        len(summary["failed"]),
+    )
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     if summary["failed"]:
         raise SystemExit(1)
