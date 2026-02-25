@@ -615,6 +615,174 @@
       "symbol": "MANAUSDT",
       "broker": "BINANCE",
       "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "PEPPERSTONE",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "PEPPERSTONE",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "PEPPERSTONE",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "PEPPERSTONE",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US30",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "FOREXCOM",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "FOREXCOM",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "FOREXCOM",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "FOREXCOM",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "NAS100",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "CAPITAL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "CAPITAL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "CAPITAL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "CAPITAL",
+      "timeframe": "1000R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "BLACKBULL",
+      "timeframe": "1m"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "BLACKBULL",
+      "timeframe": "10R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "BLACKBULL",
+      "timeframe": "100R"
+    },
+    {
+      "enabled": true,
+      "source": "tradingview",
+      "symbol": "US500",
+      "broker": "BLACKBULL",
+      "timeframe": "1000R"
     }
   ]
 }
