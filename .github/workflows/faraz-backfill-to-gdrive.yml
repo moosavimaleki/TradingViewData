@@ -41,6 +41,14 @@ on:
           - "true"
           - "false"
         default: "true"
+      skip_if_local_exists:
+        description: "Skip API fetch for symbol/timeframe if local data/faraz parquet already exists"
+        required: true
+        type: choice
+        options:
+          - "true"
+          - "false"
+        default: "true"
       push_to_drive:
         description: "Push updated data/faraz to GDrive"
         required: true
@@ -144,6 +152,7 @@ jobs:
           LOG_LEVEL="${{ github.event.inputs.log_level }}"
           START_AT="${{ github.event.inputs.start }}"
           END_AT="${{ github.event.inputs.end }}"
+          SKIP_IF_LOCAL_EXISTS="${{ github.event.inputs.skip_if_local_exists }}"
 
           echo "CONFIG_PATH=$CONFIG_PATH"
           echo "DATA_ROOT=$DATA_ROOT"
@@ -151,6 +160,7 @@ jobs:
           echo "LOG_LEVEL=$LOG_LEVEL"
           echo "START_AT=${START_AT:-<blank => epoch>}"
           echo "END_AT=${END_AT:-<blank => now>}"
+          echo "SKIP_IF_LOCAL_EXISTS=$SKIP_IF_LOCAL_EXISTS"
 
           CMD=(python backfill/faraz/backfill_from_jobs.py
             --config "$CONFIG_PATH"
@@ -163,6 +173,9 @@ jobs:
           fi
           if [ -n "$END_AT" ]; then
             CMD+=(--end "$END_AT")
+          fi
+          if [ "$SKIP_IF_LOCAL_EXISTS" = "true" ]; then
+            CMD+=(--skip-if-local-exists)
           fi
 
           printf 'Running: %q ' "${CMD[@]}"; echo

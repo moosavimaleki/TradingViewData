@@ -732,28 +732,28 @@
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITAL",
+      "broker": "CAPITALCOM",
       "timeframe": "1m"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITAL",
+      "broker": "CAPITALCOM",
       "timeframe": "10R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITAL",
+      "broker": "CAPITALCOM",
       "timeframe": "100R"
     },
     {
       "enabled": true,
       "source": "tradingview",
       "symbol": "US500",
-      "broker": "CAPITAL",
+      "broker": "CAPITALCOM",
       "timeframe": "1000R"
     },
     {
@@ -783,6 +783,6 @@
       "symbol": "US500",
       "broker": "BLACKBULL",
       "timeframe": "1000R"
-    }
+    },من نیلوفر هستم و می‌خوام تجربه‌ام را با شما به اشتراک بگذارم.
   ]
 }

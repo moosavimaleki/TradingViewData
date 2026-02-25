@@ -37,6 +37,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--timeout-sec", type=int, default=int(os.getenv("FARAZ_TIMEOUT_SEC", "45")))
     p.add_argument("--max-retries", type=int, default=int(os.getenv("FARAZ_MAX_RETRIES", "3")))
     p.add_argument("--log-level", default=os.getenv("FARAZ_BACKFILL_LOG_LEVEL", "INFO"))
+    p.add_argument(
+        "--skip-if-local-exists",
+        action="store_true",
+        help="Skip API fetch when any local parquet already exists under data/faraz/{broker}/{timeframe}/{symbol}",
+    )
     return p.parse_args()
 
 
@@ -57,6 +62,13 @@ def _cookie_from_env() -> str:
     if cookie:
         return cookie
     return str(os.getenv("FARAZ_COOKIES", "")).strip()
+
+
+def _has_any_local_faraz_data(*, data_root: Path, broker: str, timeframe: str, symbol: str) -> bool:
+    base = data_root / "faraz" / str(broker).upper() / str(timeframe).strip() / str(symbol).upper()
+    if not base.exists() or not base.is_dir():
+        return False
+    return any(p.is_file() for p in base.glob("*.parquet"))
 
 
 def main() -> None:
@@ -93,13 +105,14 @@ def main() -> None:
     summary = {"ok": [], "skipped": [], "failed": []}
     seen = set()
     logger.info(
-        "Starting Faraz backfill config=%s data_root=%s start=%s end=%s faraz_brokers=%s total_jobs=%s",
+        "Starting Faraz backfill config=%s data_root=%s start=%s end=%s faraz_brokers=%s total_jobs=%s skip_if_local_exists=%s",
         config_path,
         data_root,
         start_dt.isoformat(),
         end_dt.isoformat(),
         faraz_brokers,
         len(jobs),
+        bool(args.skip_if_local_exists),
     )
 
     progress_total = len(jobs)
@@ -152,6 +165,30 @@ def main() -> None:
             seen.add(key)
 
             try:
+                if args.skip_if_local_exists and _has_any_local_faraz_data(
+                    data_root=data_root,
+                    broker=storage_broker,
+                    timeframe=tf,
+                    symbol=symbol,
+                ):
+                    logger.info(
+                        "  skip existing local faraz data symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
+                        symbol,
+                        tf,
+                        faraz_broker,
+                        storage_broker,
+                    )
+                    summary["skipped"].append(
+                        {
+                            "symbol": symbol,
+                            "broker": faraz_broker,
+                            "storage_broker": storage_broker,
+                            "timeframe": tf,
+                            "reason": "local faraz parquet already exists",
+                        }
+                    )
+                    continue
+
                 logger.info(
                     "  fetch start symbol=%s tf=%s faraz_broker=%s storage_broker=%s",
                     symbol,

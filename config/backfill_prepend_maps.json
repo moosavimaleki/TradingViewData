@@ -3,287 +3,221 @@
     {
       "faraz": {
         "symbol": "ADAUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "ADAUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "BNBUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "BNBUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "BTCUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "BTCUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "DOGEUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "DOGEUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "LUNAUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "LUNAUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "MANAUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "MANAUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "SHIBUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "SHIBUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "SOLUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "SOLUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "XRPUSDT",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FARAZ"
       },
       "target": {
         "source": "tradingview",
         "symbol": "XRPUSDT",
-        "broker": "BINANCE",
-        "timeframe": "1m"
+        "broker": "BINANCE"
       }
     },
     {
       "faraz": {
         "symbol": "AUDUSD",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "AUDUSD",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "EURUSD",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "EURUSD",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "GBPUSD",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "GBPUSD",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "NAS100",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "NAS100",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "US30",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "US30",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
-      }
-    },
-    {
-      "faraz": {
-        "symbol": "US500",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
-      },
-      "target": {
-        "source": "tradingview",
-        "symbol": "US500",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "USDCHF",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "USDCHF",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "USDJPY",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "USDJPY",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "XAUUSD",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "XAUUSD",
-        "broker": "BLACKBULL",
-        "timeframe": "1m"
-      }
-    },
-    {
-      "faraz": {
-        "symbol": "US500",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
-      },
-      "target": {
-        "source": "tradingview",
-        "symbol": "US500",
-        "broker": "CAPITAL",
-        "timeframe": "1m"
+        "broker": "BLACKBULL"
       }
     },
     {
       "faraz": {
         "symbol": "NAS100",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "NAS100",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       }
     },
     {
       "faraz": {
         "symbol": "US30",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "US30",
-        "broker": "PEPPERSTONE",
-        "timeframe": "1m"
+        "broker": "PEPPERSTONE"
       }
     },
     {
       "faraz": {
         "symbol": "DXY",
-        "broker": "FOREXCOM",
-        "timeframe": "1m"
+        "broker": "FOREXCOM"
       },
       "target": {
         "source": "tradingview",
         "symbol": "DXY",
-        "broker": "TVC",
-        "timeframe": "1m"
+        "broker": "TVC"
       }
     }
   ]
