@@ -14,7 +14,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backfill.faraz.client import FarazClient, SUPPORTED_BROKERS
+from backfill.faraz.client import (
+    FarazClient,
+    SUPPORTED_BROKERS,
+    UnsupportedFarazSymbolError,
+    storage_broker_for_symbol,
+)
 from backfill.faraz.storage import merge_parquet, parquet_path_for_year, split_by_year
 from collector.pipeline.config import is_range_timeframe, load_jobs, normalize_timeframe, resolve_symbol_exchange
 
@@ -101,7 +106,8 @@ def main() -> None:
             continue
 
         for faraz_broker in faraz_brokers:
-            key = (symbol.upper(), tf, faraz_broker)
+            storage_broker = storage_broker_for_symbol(symbol=symbol, requested_broker=faraz_broker)
+            key = (symbol.upper(), tf, storage_broker)
             if key in seen:
                 continue
             seen.add(key)
@@ -125,7 +131,7 @@ def main() -> None:
                     path = parquet_path_for_year(
                         data_root=data_root,
                         source="faraz",
-                        broker=faraz_broker,
+                        broker=storage_broker,
                         timeframe=tf,
                         symbol=symbol,
                         year=year,
@@ -137,6 +143,7 @@ def main() -> None:
                     {
                         "symbol": symbol,
                         "broker": faraz_broker,
+                        "storage_broker": storage_broker,
                         "timeframe": tf,
                         "rows": int(stats.rows),
                         "pages": int(stats.pages),
@@ -145,9 +152,25 @@ def main() -> None:
                         "files": file_stats,
                     }
                 )
+            except UnsupportedFarazSymbolError as exc:
+                summary["skipped"].append(
+                    {
+                        "symbol": symbol,
+                        "broker": faraz_broker,
+                        "storage_broker": storage_broker,
+                        "timeframe": tf,
+                        "reason": str(exc),
+                    }
+                )
             except Exception as exc:  # pragma: no cover
                 summary["failed"].append(
-                    {"symbol": symbol, "broker": faraz_broker, "timeframe": tf, "error": f"{type(exc).__name__}: {exc}"}
+                    {
+                        "symbol": symbol,
+                        "broker": faraz_broker,
+                        "storage_broker": storage_broker,
+                        "timeframe": tf,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
                 )
 
     print(json.dumps(summary, ensure_ascii=False, indent=2))

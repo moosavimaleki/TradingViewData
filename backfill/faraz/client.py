@@ -24,6 +24,26 @@ TIMEFRAME_TO_RESOLUTION: Dict[str, str] = {
 }
 
 SUPPORTED_BROKERS = {"FXCM", "FOREXCOM", "OANDA"}
+BROKERLESS_CRYPTO_SYMBOLS = {
+    "ADAUSDT",
+    "BNBUSDT",
+    "DOGEUSDT",
+    "LUNAUSDT",
+    "MANAUSDT",
+    "SHIBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    # Existing brokerless crypto handling kept intact.
+    "BTCUSDT",
+    "ETHUSDT",
+}
+SYMBOL_NAME_ALIASES = {
+    "DXY": "TVC_DXY",
+}
+UNSUPPORTED_SYMBOLS = {
+    "US500",
+}
+BROKERLESS_STORAGE_BROKER = "FARAZ"
 
 
 @dataclass(frozen=True)
@@ -32,6 +52,17 @@ class FetchStats:
     rows: int
     first_ts: Optional[float]
     last_ts: Optional[float]
+
+
+class UnsupportedFarazSymbolError(ValueError):
+    pass
+
+
+def storage_broker_for_symbol(*, symbol: str, requested_broker: str) -> str:
+    sym = str(symbol).strip().upper()
+    if sym in BROKERLESS_CRYPTO_SYMBOLS:
+        return BROKERLESS_STORAGE_BROKER
+    return str(requested_broker).strip().upper()
 
 
 class FarazClient:
@@ -97,9 +128,14 @@ class FarazClient:
         bro = str(broker).strip().upper()
         if bro not in SUPPORTED_BROKERS:
             raise ValueError(f"Unsupported Faraz broker: {broker}")
+        if sym in UNSUPPORTED_SYMBOLS:
+            raise UnsupportedFarazSymbolError(f"Faraz symbol is not available: {sym}")
+        alias = SYMBOL_NAME_ALIASES.get(sym)
+        if alias:
+            return alias
 
-        # Crypto symbols are usually exposed directly on Faraz.
-        if sym in {"BTCUSDT", "ETHUSDT"}:
+        # Some crypto symbols are exposed directly on Faraz without broker prefix.
+        if sym in BROKERLESS_CRYPTO_SYMBOLS:
             return sym
         return f"{bro}_{sym}"
 

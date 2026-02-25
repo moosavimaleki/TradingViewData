@@ -1,0 +1,169 @@
+name: Faraz Backfill To GDrive
+
+on:
+  workflow_dispatch:
+    inputs:
+      config_path:
+        description: "Path to collect jobs config"
+        required: true
+        default: "config/collect_jobs.json"
+      data_root:
+        description: "Local data root"
+        required: true
+        default: "data"
+      faraz_brokers:
+        description: "Comma-separated Faraz brokers"
+        required: true
+        default: "FOREXCOM,FXCM"
+      start:
+        description: "Backfill start (UTC ISO8601)"
+        required: true
+        default: "2017-01-01T00:00:00Z"
+      end:
+        description: "Backfill end (UTC ISO8601, optional)"
+        required: false
+        default: ""
+      pull_existing_faraz_from_drive:
+        description: "Pull existing data/faraz from GDrive before merge"
+        required: true
+        type: choice
+        options:
+          - "true"
+          - "false"
+        default: "true"
+      push_to_drive:
+        description: "Push updated data/faraz to GDrive"
+        required: true
+        type: choice
+        options:
+          - "true"
+          - "false"
+        default: "true"
+
+concurrency:
+  group: faraz-backfill-manual
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Pin run timestamps (UTC)
+        run: |
+          set -euo pipefail
+          echo "RUN_TS_UTC=$(date -u +%FT%TZ)" >> "$GITHUB_ENV"
+          echo "RUN_STAMP_UTC=$(date -u +%Y-%m-%dT%H-%M-%SZ)" >> "$GITHUB_ENV"
+          echo "RUN_YEAR=$(date -u +%Y)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install rclone
+        if: github.event.inputs.push_to_drive == 'true' || github.event.inputs.pull_existing_faraz_from_drive == 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y rclone
+
+      - name: Configure rclone (required for pull/push)
+        if: github.event.inputs.push_to_drive == 'true' || github.event.inputs.pull_existing_faraz_from_drive == 'true'
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+          GDRIVE_REMOTE_PATH: ${{ vars.GDRIVE_REMOTE_PATH }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RCLONE_CONF:-}" ]; then
+            echo "::error::RCLONE_CONF secret is required for Drive pull/push."
+            exit 1
+          fi
+          mkdir -p ~/.config/rclone
+          printf '%s' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+          echo "RCLONE_REMOTE_PATH=${GDRIVE_REMOTE_PATH:-gdrive:market-data}" >> "$GITHUB_ENV"
+
+      - name: Validate Drive write access
+        if: github.event.inputs.push_to_drive == 'true'
+        run: |
+          set -euo pipefail
+          PROBE_FILE="$(mktemp)"
+          PROBE_REMOTE="${RCLONE_REMOTE_PATH%/}/.write_probe.txt"
+          echo "probe $(date -u +%FT%TZ)" > "$PROBE_FILE"
+          rclone copyto "$PROBE_FILE" "$PROBE_REMOTE" -v
+          rclone deletefile "$PROBE_REMOTE" -v || true
+
+      - name: Pull existing Faraz data from Drive (optional)
+        if: github.event.inputs.pull_existing_faraz_from_drive == 'true'
+        run: |
+          set -euo pipefail
+          DATA_ROOT="${{ github.event.inputs.data_root }}"
+          mkdir -p "$DATA_ROOT/faraz"
+          rclone copy "${RCLONE_REMOTE_PATH%/}/data/faraz" "$DATA_ROOT/faraz" -v || true
+
+      - name: Run Faraz backfill (all non-range timeframes in collect_jobs)
+        env:
+          FARAZ_COOKIE_STRING: ${{ secrets.FARAZ_COOKIE_STRING }}
+          FARAZ_COOKIES: ${{ secrets.FARAZ_COOKIES }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FARAZ_COOKIE_STRING:-}" ] && [ -z "${FARAZ_COOKIES:-}" ]; then
+            echo "::error::Set FARAZ_COOKIE_STRING (or FARAZ_COOKIES) in repository secrets."
+            exit 1
+          fi
+
+          CONFIG_PATH="${{ github.event.inputs.config_path }}"
+          DATA_ROOT="${{ github.event.inputs.data_root }}"
+          FARAZ_BROKERS="${{ github.event.inputs.faraz_brokers }}"
+          START_AT="${{ github.event.inputs.start }}"
+          END_AT="${{ github.event.inputs.end }}"
+
+          CMD=(python backfill/faraz/backfill_from_jobs.py
+            --config "$CONFIG_PATH"
+            --data-root "$DATA_ROOT"
+            --faraz-brokers "$FARAZ_BROKERS"
+            --start "$START_AT"
+          )
+          if [ -n "$END_AT" ]; then
+            CMD+=(--end "$END_AT")
+          fi
+
+          printf 'Running: %q ' "${CMD[@]}"; echo
+          "${CMD[@]}" | tee faraz_backfill_summary.json
+
+      - name: Push Faraz parquet files to Drive
+        if: always() && github.event.inputs.push_to_drive == 'true'
+        run: |
+          set -euo pipefail
+          DATA_ROOT="${{ github.event.inputs.data_root }}"
+          if [ ! -d "$DATA_ROOT/faraz" ]; then
+            echo "::error::No local faraz directory found at $DATA_ROOT/faraz"
+            exit 1
+          fi
+          rclone copy "$DATA_ROOT/faraz" "${RCLONE_REMOTE_PATH%/}/data/faraz" \
+            --create-empty-src-dirs \
+            -v
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: faraz-backfill-${{ env.RUN_STAMP_UTC }}
+          path: |
+            faraz_backfill_summary.json
+          if-no-files-found: ignore

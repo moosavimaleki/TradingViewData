@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backfill.faraz.storage import load_parquet, merge_parquet, normalize_ohlcv, parquet_path_for_year, split_by_year
+from backfill.faraz.client import storage_broker_for_symbol
 
 logger = logging.getLogger("backfill.faraz.prepend_from_faraz")
 
@@ -118,7 +119,8 @@ def main() -> None:
             summary["failed"].append({"map": item.__dict__, "error": "invalid map item (missing fields)"})
             continue
 
-        faraz_base = data_root / "faraz" / item.faraz_broker / item.faraz_timeframe / item.faraz_symbol
+        faraz_storage_broker = storage_broker_for_symbol(symbol=item.faraz_symbol, requested_broker=item.faraz_broker)
+        faraz_base = data_root / "faraz" / faraz_storage_broker / item.faraz_timeframe / item.faraz_symbol
         target_base = data_root / item.target_source / item.target_broker / item.target_timeframe / item.target_symbol
 
         target_df = _load_concat_years(target_base)
@@ -154,6 +156,7 @@ def main() -> None:
         summary["ok"].append(
             {
                 "map": item.__dict__,
+                "faraz_storage_broker": faraz_storage_broker,
                 "earliest_target_ts": earliest_target_ts,
                 "prepended_rows": int(len(prepend_df)),
                 "files": file_stats,
