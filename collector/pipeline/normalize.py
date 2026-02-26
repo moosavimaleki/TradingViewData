@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 REQUIRED_NUMERIC = ("open", "high", "low", "close", "volume")
+PROVENANCE_COLUMN = "faraz"
 TS_ALIASES = ("ts", "timestamp", "time", "datetime", "date", "index")
 
 
@@ -48,7 +49,7 @@ def normalize_frame(
     drop_latest_candle: bool,
 ) -> pd.DataFrame:
     if df is None or df.empty:
-        return pd.DataFrame(columns=["ts", *REQUIRED_NUMERIC])
+        return pd.DataFrame(columns=["ts", *REQUIRED_NUMERIC, PROVENANCE_COLUMN])
 
     out = df.copy()
 
@@ -75,12 +76,20 @@ def normalize_frame(
             else:
                 out[col] = 0.0 if col == "volume" else pd.NA
 
+    if PROVENANCE_COLUMN not in out.columns:
+        if PROVENANCE_COLUMN in lower_map:
+            out = out.rename(columns={lower_map[PROVENANCE_COLUMN]: PROVENANCE_COLUMN})
+        else:
+            out[PROVENANCE_COLUMN] = 0
+
     out["ts"] = to_epoch_seconds(out["ts"])
 
     for col in REQUIRED_NUMERIC:
         out[col] = pd.to_numeric(out[col], errors="coerce")
         if col == "volume":
             out[col] = out[col].fillna(0.0)
+    out[PROVENANCE_COLUMN] = pd.to_numeric(out[PROVENANCE_COLUMN], errors="coerce").fillna(0)
+    out[PROVENANCE_COLUMN] = (out[PROVENANCE_COLUMN] != 0).astype("int8")
 
     out = out.dropna(subset=["ts", "open", "high", "low", "close"])
     out = out.sort_values("ts")
@@ -92,4 +101,5 @@ def normalize_frame(
     out["ts"] = out["ts"].astype("float64")
     for col in REQUIRED_NUMERIC:
         out[col] = out[col].astype("float64")
-    return out
+    out[PROVENANCE_COLUMN] = out[PROVENANCE_COLUMN].astype("int8")
+    return out[["ts", *REQUIRED_NUMERIC, PROVENANCE_COLUMN]]

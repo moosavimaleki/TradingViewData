@@ -8,7 +8,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 import pandas as pd
 
@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from backfill.faraz.storage import load_parquet, merge_parquet, normalize_ohlcv, parquet_path_for_year, split_by_year
+from backfill.faraz.storage import PROVENANCE_COLUMN, load_parquet, normalize_ohlcv, parquet_path_for_year, split_by_year
 from backfill.faraz.client import storage_broker_for_symbol
 
 logger = logging.getLogger("backfill.faraz.prepend_from_faraz")
@@ -85,16 +85,93 @@ def _all_year_files(base: Path) -> List[Path]:
     return files
 
 
-def _load_concat_years(base: Path) -> pd.DataFrame:
+def _load_concat_years(base: Path, *, default_faraz: int) -> pd.DataFrame:
     parts = []
     for path in _all_year_files(base):
         try:
-            parts.append(load_parquet(path))
+            parts.append(load_parquet(path, default_faraz=default_faraz))
         except Exception:
             continue
     if not parts:
-        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
-    return normalize_ohlcv(pd.concat(parts, ignore_index=True, sort=False))
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume", PROVENANCE_COLUMN])
+    return normalize_ohlcv(pd.concat(parts, ignore_index=True, sort=False), default_faraz=default_faraz)
+
+
+def _safe_year_from_filename(path: Path) -> int | None:
+    stem = path.stem.strip()
+    if stem.isdigit():
+        try:
+            return int(stem)
+        except Exception:
+            return None
+    return None
+
+
+def _rewrite_target_timeframe_partition(
+    *,
+    data_root: Path,
+    item: MapItem,
+    target_timeframe: str,
+    combined_df: pd.DataFrame,
+) -> List[Dict[str, object]]:
+    target_base = data_root / item.target_source / item.target_broker / target_timeframe / item.target_symbol
+    existing_files = _all_year_files(target_base)
+    existing_by_year = {y: p for p in existing_files if (y := _safe_year_from_filename(p)) is not None}
+
+    normalized = normalize_ohlcv(combined_df, default_faraz=0)
+    split_parts = list(split_by_year(normalized, default_faraz=0))
+    new_years = {int(year) for year, _ in split_parts}
+
+    file_stats: List[Dict[str, object]] = []
+    for year, part in split_parts:
+        target_file = parquet_path_for_year(
+            data_root=data_root,
+            source=item.target_source,
+            broker=item.target_broker,
+            timeframe=target_timeframe,
+            symbol=item.target_symbol,
+            year=year,
+        )
+        before_df = load_parquet(target_file, default_faraz=0)
+        rows_before = int(len(before_df))
+        normalized_part = normalize_ohlcv(part, default_faraz=0)
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        normalized_part.to_parquet(target_file, engine="pyarrow", compression="zstd", index=False)
+
+        rows_after = int(len(normalized_part))
+        deduped = int(max(0, len(part) - rows_after))
+        added = int(rows_after - rows_before)
+        file_stats.append(
+            {
+                "year": int(year),
+                "file": str(target_file),
+                "before": rows_before,
+                "after": rows_after,
+                "deduped": deduped,
+                "added": added,
+                "rewritten": True,
+            }
+        )
+
+    for year, stale_path in sorted(existing_by_year.items()):
+        if year in new_years:
+            continue
+        stale_path.unlink(missing_ok=True)
+        file_stats.append(
+            {
+                "year": int(year),
+                "file": str(stale_path),
+                "before": 0,
+                "after": 0,
+                "deduped": 0,
+                "added": 0,
+                "rewritten": False,
+                "deleted_stale_year_file": True,
+            }
+        )
+
+    file_stats.sort(key=lambda x: (int(x.get("year", 0)), str(x.get("file", ""))))
+    return file_stats
 
 
 def _discover_target_timeframes(*, data_root: Path, item: MapItem) -> List[str]:
@@ -208,14 +285,14 @@ def main() -> None:
                 faraz_storage_broker,
             )
 
-            target_df = _load_concat_years(target_base)
+            target_df = _load_concat_years(target_base, default_faraz=0)
             if target_df.empty:
                 summary["skipped"].append(
                     {"target": {**item.__dict__, "timeframe": target_timeframe}, "reason": "target has no data"}
                 )
                 continue
 
-            faraz_df = _load_concat_years(faraz_base)
+            faraz_df = _load_concat_years(faraz_base, default_faraz=1)
             if faraz_df.empty:
                 summary["skipped"].append(
                     {
@@ -228,36 +305,47 @@ def main() -> None:
 
             earliest_target_ts = float(target_df["ts"].min())
             prepend_df = faraz_df[faraz_df["ts"] < earliest_target_ts].copy()
-            prepend_df = normalize_ohlcv(prepend_df)
+            prepend_df[PROVENANCE_COLUMN] = 1
+            prepend_df = normalize_ohlcv(prepend_df, default_faraz=1)
             if prepend_df.empty:
                 summary["skipped"].append(
                     {"target": {**item.__dict__, "timeframe": target_timeframe}, "reason": "no older rows to prepend"}
                 )
                 continue
 
-            file_stats = []
-            for year, part in split_by_year(prepend_df):
-                target_file = parquet_path_for_year(
-                    data_root=data_root,
-                    source=item.target_source,
-                    broker=item.target_broker,
-                    timeframe=target_timeframe,
-                    symbol=item.target_symbol,
-                    year=year,
-                )
-                stats = merge_parquet(target_file, part)
+            # Rebuild the whole target timeframe partition after prepend so rows stored in the
+            # wrong year file (e.g. 2024 rows inside 2026.parquet) are moved to the correct year.
+            combined_target = pd.concat([target_df, prepend_df], ignore_index=True, sort=False)
+            combined_target = normalize_ohlcv(combined_target, default_faraz=0)
+            file_stats = _rewrite_target_timeframe_partition(
+                data_root=data_root,
+                item=item,
+                target_timeframe=target_timeframe,
+                combined_df=combined_target,
+            )
+
+            for fs in file_stats:
+                if fs.get("deleted_stale_year_file"):
+                    logger.info(
+                        "  deleted stale year file symbol=%s broker=%s tf=%s year=%s path=%s",
+                        item.target_symbol,
+                        item.target_broker,
+                        target_timeframe,
+                        fs.get("year"),
+                        fs.get("file"),
+                    )
+                    continue
                 logger.info(
-                    "  merged target symbol=%s broker=%s tf=%s year=%s added=%s deduped=%s after=%s path=%s",
+                    "  rewrote target symbol=%s broker=%s tf=%s year=%s added=%s deduped=%s after=%s path=%s",
                     item.target_symbol,
                     item.target_broker,
                     target_timeframe,
-                    year,
-                    stats.get("added"),
-                    stats.get("deduped"),
-                    stats.get("after"),
-                    target_file,
+                    fs.get("year"),
+                    fs.get("added"),
+                    fs.get("deduped"),
+                    fs.get("after"),
+                    fs.get("file"),
                 )
-                file_stats.append({"year": int(year), "file": str(target_file), **stats})
 
             summary["ok"].append(
                 {

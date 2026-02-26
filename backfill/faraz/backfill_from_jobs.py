@@ -217,7 +217,7 @@ def main() -> None:
                     continue
 
                 file_stats = []
-                for year, part in split_by_year(df):
+                for year, part in split_by_year(df, default_faraz=1):
                     path = parquet_path_for_year(
                         data_root=data_root,
                         source="faraz",
@@ -226,7 +226,7 @@ def main() -> None:
                         symbol=symbol,
                         year=year,
                     )
-                    merge_stats = merge_parquet(path, part)
+                    merge_stats = merge_parquet(path, part, default_faraz=1)
                     logger.info(
                         "  file merged symbol=%s tf=%s year=%s faraz_broker=%s storage_broker=%s added=%s deduped=%s after=%s path=%s",
                         symbol,

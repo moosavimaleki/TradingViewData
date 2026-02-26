@@ -5,7 +5,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .normalize import REQUIRED_NUMERIC, normalize_frame
+from .normalize import PROVENANCE_COLUMN, REQUIRED_NUMERIC, normalize_frame
 
 
 def year_file_path(
@@ -22,7 +22,7 @@ def year_file_path(
 
 def load_existing_parquet(path: Path) -> pd.DataFrame:
     if not path.exists():
-        return pd.DataFrame(columns=["ts", *REQUIRED_NUMERIC])
+        return pd.DataFrame(columns=["ts", *REQUIRED_NUMERIC, PROVENANCE_COLUMN])
     df = pd.read_parquet(path, engine="pyarrow")
     return normalize_frame(df, drop_latest_candle=False)
 
@@ -52,6 +52,7 @@ def merge_and_save_parquet(path: Path, old_df: pd.DataFrame, new_df: pd.DataFram
     rows_before = int(len(old_df))
     merged = pd.concat([old_df, new_df], ignore_index=True, sort=False)
     before_dedup = int(len(merged))
+    merged = normalize_frame(merged, drop_latest_candle=False)
 
     merged = merged.sort_values("ts")
     merged = merged.drop_duplicates(subset=["ts"], keep="last")
