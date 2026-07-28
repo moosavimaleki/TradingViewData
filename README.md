@@ -27,6 +27,7 @@
 
 | گزارش | وضعیت | زمان اجرا (تهران) |
 |---|---|---|
+| 📄 [2026-07-28T08-45-38Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-28T08-45-38Z.md) | ❌ `failed` | `2026-07-28` `12:15:38` |
 | 📄 [2026-07-28T03-17-20Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-28T03-17-20Z.md) | ✅ `success` | `2026-07-28` `06:47:20` |
 | 📄 [2026-07-27T19-44-33Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-27T19-44-33Z.md) | ✅ `success` | `2026-07-27` `23:14:33` |
 | 📄 [2026-07-27T14-50-53Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-27T14-50-53Z.md) | ✅ `success` | `2026-07-27` `18:20:53` |
@@ -36,6 +37,5 @@
 | 📄 [2026-07-26T13-42-47Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-26T13-42-47Z.md) | ✅ `success` | `2026-07-26` `17:12:47` |
 | 📄 [2026-07-26T08-34-41Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-26T08-34-41Z.md) | ✅ `success` | `2026-07-26` `12:04:41` |
 | 📄 [2026-07-26T03-37-32Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-26T03-37-32Z.md) | ✅ `success` | `2026-07-26` `07:07:32` |
-| 📄 [2026-07-25T19-17-42Z.md](https://github.com/moosavimaleki/TradingViewData/blob/main/artifacts/tvdatafeed/2026-07-25T19-17-42Z.md) | ✅ `success` | `2026-07-25` `22:47:42` |
 
 <!-- RUN_TABLE_END -->
