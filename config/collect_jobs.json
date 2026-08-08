@@ -528,13 +528,6 @@
     {
       "enabled": true,
       "source": "tradingview",
-      "symbol": "AUDUSD",
-      "broker": "BLACKBULL",
-      "timeframe": "1000R"
-    },
-    {
-      "enabled": true,
-      "source": "tradingview",
       "symbol": "LUNAUSDT",
       "broker": "BINANCE",
       "timeframe": "1m"
@@ -556,13 +549,6 @@
     {
       "enabled": true,
       "source": "tradingview",
-      "symbol": "LUNAUSDT",
-      "broker": "BINANCE",
-      "timeframe": "1000R"
-    },
-    {
-      "enabled": true,
-      "source": "tradingview",
       "symbol": "SHIBUSDT",
       "broker": "BINANCE",
       "timeframe": "1m"
@@ -580,13 +566,6 @@
       "symbol": "SHIBUSDT",
       "broker": "BINANCE",
       "timeframe": "100R"
-    },
-    {
-      "enabled": true,
-      "source": "tradingview",
-      "symbol": "SHIBUSDT",
-      "broker": "BINANCE",
-      "timeframe": "1000R"
     },
     {
       "enabled": true,
