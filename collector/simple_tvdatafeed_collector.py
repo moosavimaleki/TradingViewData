@@ -79,6 +79,7 @@ def _fetch_range_with_overlap(
     cutoff_ts = range_cutoff_ts(existing_df, overlap_bars)
     n_bars = max(1, min(int(initial_bars), int(max_bars)))
     fetched = None
+    snapshot_first_ts = snapshot_last_ts = None
 
     for _ in range(10):
         raw = ws_fetcher.fetch_latest_range(
@@ -87,7 +88,10 @@ def _fetch_range_with_overlap(
             timeframe=timeframe,
             n_bars=int(n_bars),
         )
-        fetched = normalize_frame(raw, drop_latest_candle=True, is_range=True)
+        received = normalize_frame(raw, drop_latest_candle=False, is_range=True)
+        snapshot_first_ts = float(received["ts"].iloc[0]) if not received.empty else None
+        snapshot_last_ts = float(received["ts"].iloc[-1]) if not received.empty else None
+        fetched = received.iloc[:-1].reset_index(drop=True)
         logger.info(
             "range snapshot symbol=%s:%s tf=%s requested=%s stable_rows=%s first_ts=%s last_ts=%s cutoff_ts=%s",
             symbol,
@@ -104,7 +108,14 @@ def _fetch_range_with_overlap(
         earliest = float(fetched["ts"].min())
         if earliest <= cutoff_ts:
             try:
-                validate_range_snapshot(existing_df, fetched)
+                # Download depth is not permission to rewrite that history.
+                # Validate the actual replacement boundary, never an older
+                # reconstructed bar outside the configured overlap.
+                bounded = fetched.loc[fetched["ts"] >= cutoff_ts].reset_index(drop=True)
+                validate_range_snapshot(
+                    existing_df, bounded, overlap_start_ts=cutoff_ts,
+                    snapshot_first_ts=snapshot_first_ts, snapshot_last_ts=snapshot_last_ts,
+                )
             except RangeBoundaryError:
                 if n_bars >= int(max_bars):
                     raise
@@ -122,14 +133,21 @@ def _fetch_range_with_overlap(
             f"Range snapshot does not cover required overlap: earliest_ts={fetched['ts'].min()} "
             f"cutoff_ts={cutoff_ts} requested_bars={n_bars}. Existing parquet was not changed."
         )
-    validate_range_snapshot(existing_df, fetched)
-
-    # Keep the entire fetched snapshot so revisions outside the minimum
-    # overlap window are also replaced instead of persisting as stale bars.
+    # Preserve the archive before the overlap, even when a larger download
+    # was needed. Include the whole timestamp group at the cutoff so distinct
+    # same-time range bars retain their source order.
+    if cutoff_ts is not None:
+        fetched = fetched.loc[fetched["ts"] >= cutoff_ts].reset_index(drop=True)
+    validate_range_snapshot(
+        existing_df, fetched, overlap_start_ts=cutoff_ts,
+        snapshot_first_ts=snapshot_first_ts, snapshot_last_ts=snapshot_last_ts,
+    )
     diag = {
         "cutoff_ts": cutoff_ts,
         "fetched_n_bars": int(n_bars),
-        "replacement_start_ts": float(fetched["ts"].iloc[0]) if not fetched.empty else None,
+        "replacement_start_ts": cutoff_ts if cutoff_ts is not None else snapshot_first_ts,
+        "snapshot_first_ts": snapshot_first_ts,
+        "snapshot_last_ts": snapshot_last_ts,
     }
     return fetched.reset_index(drop=True), diag
 
@@ -258,7 +276,12 @@ def _run_collection(args, raw_archive: RawArchive) -> None:
             if old_last_ts is not None and new_first_ts is not None and old_last_ts >= new_first_ts:
                 overlap_seconds = float(old_last_ts - new_first_ts)
 
-            merge_stats = merge_and_save_parquet(out_file, old_df, new_df, is_range=is_range)
+            merge_stats = merge_and_save_parquet(
+                out_file, old_df, new_df, is_range=is_range,
+                range_overlap_bars=max(1, int(args.range_overlap_bars)),
+                snapshot_first_ts=diag.get("snapshot_first_ts") if is_range else None,
+                snapshot_last_ts=diag.get("snapshot_last_ts") if is_range else None,
+            )
             logger.info(
                 "saved symbol=%s:%s tf=%s merge_mode=%s before=%s fetched=%s replaced=%s deduped=%s after=%s",
                 symbol,

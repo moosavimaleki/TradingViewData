@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Dict
@@ -68,6 +69,29 @@ class TvDatafeedFetcher:
             )
             if raw_request is not None:
                 raw_request.frame(frame)
+        # tvDatafeed's parser calls datetime.fromtimestamp() without a
+        # timezone. Reverse that conversion using the actual host timezone;
+        # runners in UTC must not inherit this workstation's Tehran offset.
+        if frame is not None and not frame.empty:
+            index = pd.DatetimeIndex(frame.index)
+            if index.tz is None:
+                source_tz = os.getenv("TVDATAFEED_NAIVE_TZ")
+                frame = frame.copy()
+                if source_tz:
+                    frame.index = index.tz_localize(source_tz).tz_convert("UTC")
+                else:
+                    # datetime.timestamp() interprets naive datetimes in the
+                    # host's local timezone, including historical DST offsets.
+                    seconds = []
+                    for value in index.to_pydatetime():
+                        epoch = value.timestamp()
+                        if value.replace(fold=1 - value.fold).timestamp() != epoch:
+                            raise ValueError(
+                                "Provider returned an ambiguous naive local time at a DST boundary; "
+                                "use a UTC host rather than guessing its timestamp"
+                            )
+                        seconds.append(epoch)
+                    frame.index = pd.DatetimeIndex(pd.to_datetime(seconds, unit="s", utc=True), name=index.name)
         return frame
 
 

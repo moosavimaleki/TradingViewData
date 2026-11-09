@@ -144,6 +144,10 @@ class TradingViewWSFetcher:
                 try:
                     ns = series["ns"]
                     idxs = ns["indexes"]
+                    # A valid metadata-only update has d="" and no bar data.
+                    # Any regular s rows above have already been applied.
+                    if idxs == "nochange":
+                        return
                     bars = json.loads(ns["d"])["data"]["bars"]
                     if not isinstance(idxs, list) or not isinstance(bars, list) or len(bars) != len(idxs):
                         raise ValueError("bar and index counts differ")

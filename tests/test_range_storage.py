@@ -27,7 +27,7 @@ def candles(timestamps, *, price=1.0):
     )
 
 
-def test_new_range_snapshot_replaces_all_old_candles_in_covered_suffix(tmp_path):
+def test_new_range_snapshot_replaces_only_overlap_not_all_downloaded_history(tmp_path):
     # The old timestamp-union merge produces 4916 rows, retaining 55 old bars.
     old = candles(range(4905))
     new = candles([*range(4850), *range(4905, 4916)], price=20.0)
@@ -40,10 +40,11 @@ def test_new_range_snapshot_replaces_all_old_candles_in_covered_suffix(tmp_path)
     saved = load_existing_parquet(path, is_range=True)
 
     assert len(saved) == 4861
-    assert_frame_equal(saved, normalize_frame(new, drop_latest_candle=False, is_range=True))
-    assert stats["replaced_rows"] == 4905
+    expected = pd.concat([old.iloc[:4605], new[new["ts"] >= 4605]], ignore_index=True)
+    assert_frame_equal(saved, normalize_frame(expected, drop_latest_candle=False, is_range=True))
+    assert stats["replaced_rows"] == 300
     assert stats["deduped"] == 0
-    assert stats["merge_mode"] == "replace_range_suffix"
+    assert stats["merge_mode"] == "replace_range_overlap"
 
 
 def test_range_merge_preserves_equal_timestamp_bars_and_snapshot_order(tmp_path):
@@ -53,7 +54,7 @@ def test_range_merge_preserves_equal_timestamp_bars_and_snapshot_order(tmp_path)
     new["close"] = [1.5, 1.5, 11.0, 10.0, 12.0, 13.0]
     path = tmp_path / "2026.parquet"
 
-    stats = merge_and_save_parquet(path, old, new, is_range=True)
+    stats = merge_and_save_parquet(path, old, new, is_range=True, range_overlap_bars=4)
     saved = load_existing_parquet(path, is_range=True)
 
     assert saved["ts"].tolist() == [1, 2, 2, 3, 3, 4, 5]
@@ -62,7 +63,7 @@ def test_range_merge_preserves_equal_timestamp_bars_and_snapshot_order(tmp_path)
     assert stats["replaced_rows"] == 4
     assert stats["after_last_row"]["close"] == 13
 
-    merge_and_save_parquet(path, saved, new, is_range=True)
+    merge_and_save_parquet(path, saved, new, is_range=True, range_overlap_bars=6)
     assert_frame_equal(load_existing_parquet(path, is_range=True), saved)
 
 
@@ -119,20 +120,49 @@ def fetch_with_overlap(fetcher, old, *, initial_bars=10, max_bars=20):
     )
 
 
-def test_fetch_keeps_entire_snapshot_including_equal_timestamps():
+def test_fetch_trims_to_overlap_and_keeps_equal_timestamps():
     raw = candles([0, 1, 2, 2, 3, 4, 5, 6])
     fetcher = SnapshotFetcher([raw])
-    fetched, diag = fetch_with_overlap(fetcher, candles([1, 2, 3, 4, 5]))
-    assert fetched["ts"].tolist() == [0, 1, 2, 2, 3, 4, 5]
-    assert diag["cutoff_ts"] == 3
-    assert diag["replacement_start_ts"] == 0
+    fetched, diag = fetch_with_overlap(fetcher, candles([1, 2, 2, 3, 4]))
+    assert fetched["ts"].tolist() == [2, 2, 3, 4, 5]
+    assert diag["cutoff_ts"] == 2
+    assert diag["replacement_start_ts"] == 2
+
+
+def test_incremental_fetch_never_replaces_archive_before_configured_overlap(tmp_path):
+    old = candles(range(1, 11))
+    # Older reconstructed bars disagree, but they are outside our 3-bar overlap.
+    raw = candles(range(1, 13))
+    raw.loc[raw["ts"] < 8, "close"] = 99.0
+    raw.loc[raw["ts"] == 9, "close"] = 1.75
+    fetched, diag = fetch_with_overlap(SnapshotFetcher([raw]), old)
+    path = tmp_path / "2026.parquet"
+    stats = merge_and_save_parquet(path, old, fetched, is_range=True, range_overlap_bars=3,
+                                   snapshot_first_ts=diag["snapshot_first_ts"],
+                                   snapshot_last_ts=diag["snapshot_last_ts"])
+    saved = load_existing_parquet(path, is_range=True)
+    expected_prefix = normalize_frame(old[old["ts"] < 8], drop_latest_candle=False, is_range=True)
+    assert_frame_equal(saved[saved["ts"] < 8].reset_index(drop=True), expected_prefix)
+    assert fetched["ts"].tolist() == [8, 9, 10, 11]
+    assert diag["replacement_start_ts"] == 8
+    assert stats["replaced_rows"] == 3
+
+
+def test_revision_before_overlap_cannot_force_expansion_of_the_download():
+    old = candles(range(1, 11))
+    raw = candles(range(1, 13))
+    raw.loc[0, "close"] = 99.0
+    fetcher = SnapshotFetcher([raw])
+    fetched, _ = fetch_with_overlap(fetcher, old)
+    assert fetcher.requests == [10]
+    assert fetched["ts"].tolist() == [8, 9, 10, 11]
 
 
 def test_fetch_expands_request_until_required_overlap_is_covered():
     fetcher = SnapshotFetcher([candles([4, 5, 6]), candles([2, 3, 4, 5, 6])])
     fetched, _ = fetch_with_overlap(fetcher, candles([1, 2, 3, 4, 5]))
     assert fetcher.requests == [10, 20]
-    assert fetched["ts"].tolist() == [2, 3, 4, 5]
+    assert fetched["ts"].tolist() == [3, 4, 5]
 
 
 def test_short_response_does_not_count_as_full_history_or_valid_overlap(tmp_path):
@@ -168,14 +198,16 @@ def test_parquet_write_failure_preserves_original_file(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pd.DataFrame, "to_parquet", failed_write)
     with pytest.raises(OSError, match="disk write failed"):
-        merge_and_save_parquet(path, candles([1, 2, 3]), candles([2, 3, 4]), is_range=True)
+        merge_and_save_parquet(path, candles([1, 2, 3]), candles([2, 3, 4]), is_range=True,
+                               range_overlap_bars=2)
     assert path.read_bytes() == before
     assert list(tmp_path.iterdir()) == [path]
 
 
 def test_report_counts_range_replacements_separately_from_timestamp_duplicates(tmp_path):
     stats = merge_and_save_parquet(
-        tmp_path / "2026.parquet", candles([1, 2, 3]), candles([2, 3]), is_range=True
+        tmp_path / "2026.parquet", candles([1, 2, 3]), candles([2, 3]), is_range=True,
+        range_overlap_bars=2,
     )
     totals = _totals([{**stats, "fetched_rows": 2}], [], [])
     assert totals["replaced_total"] == 2
@@ -239,7 +271,7 @@ def test_ambiguous_start_triggers_a_larger_snapshot_request():
     fetcher = SnapshotFetcher([partial, complete])
     fetched, _ = fetch_with_overlap(fetcher, old)
     assert fetcher.requests == [10, 20]
-    assert fetched["close"].tolist() == [1.5, 11, 12, 13, 1.5, 1.5]
+    assert fetched["close"].tolist() == [11, 12, 13, 1.5, 1.5]
 
 
 @pytest.mark.parametrize("first_ts", [2, 2.5])

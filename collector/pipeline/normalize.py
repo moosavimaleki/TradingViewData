@@ -10,7 +10,9 @@ TS_ALIASES = ("ts", "timestamp", "time", "datetime", "date", "index")
 
 def to_epoch_seconds(series: pd.Series) -> pd.Series:
     raw = series.copy()
-    numeric = pd.to_numeric(raw, errors="coerce")
+    numeric = (pd.Series(float("nan"), index=raw.index)
+               if pd.api.types.is_datetime64_any_dtype(raw.dtype)
+               else pd.to_numeric(raw, errors="coerce"))
     out = pd.Series(index=raw.index, dtype="float64")
 
     numeric_mask = numeric.notna()
@@ -35,7 +37,11 @@ def to_epoch_seconds(series: pd.Series) -> pd.Series:
         dt = pd.to_datetime(raw[non_numeric_mask], utc=True, errors="coerce")
         valid = dt.notna()
         if valid.any():
-            out.loc[dt[valid].index] = dt[valid].astype("int64").astype("float64") / 1_000_000_000.0
+            # pandas datetime arrays may use seconds, microseconds or
+            # nanoseconds. Timedelta division is independent of that unit.
+            out.loc[dt[valid].index] = (
+                dt[valid] - pd.Timestamp("1970-01-01T00:00:00Z")
+            ) / pd.Timedelta(seconds=1)
 
     if out.isna().any():
         bad = raw[out.isna()].head(5).tolist()

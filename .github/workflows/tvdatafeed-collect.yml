@@ -19,9 +19,13 @@ on:
         required: true
         default: "data"
       overlap_bars:
-        description: "Overlap bars for incremental update"
+        description: "Overlap bars for regular time-based candles"
         required: true
         default: "30"
+      range_overlap_bars:
+        description: "Range candles to overwrite at the tail; older history stays frozen"
+        required: true
+        default: "300"
       initial_bars:
         description: "Bars to fetch on first run (no existing file)"
         required: true
@@ -42,6 +46,7 @@ jobs:
       contents: write
     env:
       RAW_ROOT: ${{ format('{0}/raw', github.event.inputs.data_root || 'data') }}
+      TZ: UTC
 
     steps:
       - uses: actions/checkout@v4
@@ -206,6 +211,7 @@ jobs:
           CONFIG_PATH="${EFFECTIVE_CONFIG_PATH}"
           DATA_ROOT="${{ github.event.inputs.data_root || 'data' }}"
           OVERLAP_BARS="${{ github.event.inputs.overlap_bars || '30' }}"
+          RANGE_OVERLAP_BARS="${{ github.event.inputs.range_overlap_bars || '300' }}"
           INITIAL_BARS="${{ github.event.inputs.initial_bars || '5000' }}"
           MAX_BARS="${{ github.event.inputs.max_bars || '5000' }}"
 
@@ -214,6 +220,7 @@ jobs:
             --data-root "$DATA_ROOT" \
             --raw-root "$RAW_ROOT" \
             --overlap-bars "$OVERLAP_BARS" \
+            --range-overlap-bars "$RANGE_OVERLAP_BARS" \
             --initial-bars "$INITIAL_BARS" \
             --max-bars "$MAX_BARS" \
             | tee tvdatafeed_summary.json

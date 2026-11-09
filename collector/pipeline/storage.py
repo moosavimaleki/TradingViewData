@@ -14,20 +14,36 @@ class RangeBoundaryError(ValueError):
     pass
 
 
-def validate_range_snapshot(current: pd.DataFrame, incoming: pd.DataFrame) -> None:
+def validate_range_snapshot(
+    current: pd.DataFrame,
+    incoming: pd.DataFrame,
+    *,
+    overlap_start_ts: float | None = None,
+    snapshot_first_ts: float | None = None,
+    snapshot_last_ts: float | None = None,
+) -> None:
     for name, frame in (("existing", current), ("incoming", incoming)):
         if not frame.empty and not frame["ts"].is_monotonic_increasing:
             raise ValueError(f"Range {name} timestamps are out of order; refusing to rewrite history")
     if current.empty or incoming.empty:
         return
-    if incoming["ts"].iloc[-1] < current["ts"].iloc[-1]:
+    covered_end = snapshot_last_ts if snapshot_last_ts is not None else float(incoming["ts"].iloc[-1])
+    if covered_end < current["ts"].iloc[-1]:
         raise ValueError("Range snapshot ends before existing history; refusing to truncate newer bars")
-    if incoming["ts"].iloc[-1] == current["ts"].iloc[-1]:
+    if snapshot_last_ts is None and incoming["ts"].iloc[-1] == current["ts"].iloc[-1]:
         last_ts = current["ts"].iloc[-1]
         if (incoming["ts"] == last_ts).sum() < (current["ts"] == last_ts).sum():
             raise ValueError("Range snapshot has a shorter same-second tail; refusing to truncate known bars")
 
-    first_ts = incoming["ts"].iloc[0]
+    first_ts = overlap_start_ts if overlap_start_ts is not None else float(incoming["ts"].iloc[0])
+    covered_start = snapshot_first_ts if snapshot_first_ts is not None else float(incoming["ts"].iloc[0])
+    if covered_start > first_ts:
+        raise RangeBoundaryError("Range snapshot does not cover the configured overlap boundary")
+    if covered_start < first_ts:
+        # Receiving an earlier timestamp proves this entire boundary group
+        # was included. Its values/count may legitimately repaint inside
+        # the overwrite window; matching old prices is not required.
+        return
     old_group = current.loc[current["ts"] == first_ts, list(REQUIRED_NUMERIC)].astype("float64").reset_index(drop=True)
     new_group = incoming.loc[incoming["ts"] == first_ts, list(REQUIRED_NUMERIC)].astype("float64").reset_index(drop=True)
     if old_group.empty and current["ts"].iloc[0] < first_ts:
@@ -102,6 +118,9 @@ def merge_and_save_parquet(
     new_df: pd.DataFrame,
     *,
     is_range: bool = False,
+    range_overlap_bars: int = 300,
+    snapshot_first_ts: float | None = None,
+    snapshot_last_ts: float | None = None,
 ) -> dict:
     rows_before = int(len(old_df))
     replaced_rows = 0
@@ -110,14 +129,24 @@ def merge_and_save_parquet(
     if is_range:
         current = normalize_frame(old_df, drop_latest_candle=False, is_range=True)
         incoming = normalize_frame(new_df, drop_latest_candle=False, is_range=True)
-        validate_range_snapshot(current, incoming)
+        replacement_start_ts = range_cutoff_ts(current, max(1, int(range_overlap_bars)))
+        if not incoming.empty:
+            if snapshot_first_ts is None:
+                snapshot_first_ts = float(incoming["ts"].iloc[0])
+            if replacement_start_ts is not None:
+                incoming = incoming.loc[incoming["ts"] >= replacement_start_ts].reset_index(drop=True)
+        validate_range_snapshot(
+            current, incoming, overlap_start_ts=replacement_start_ts,
+            snapshot_first_ts=snapshot_first_ts, snapshot_last_ts=snapshot_last_ts,
+        )
 
         if incoming.empty:
             merged = current
         else:
-            replacement_start_ts = float(incoming["ts"].iloc[0])
-            # A new range snapshot can revise or remove old bars. Keep only
-            # the old prefix; never union two versions of the covered suffix.
+            if replacement_start_ts is None:
+                replacement_start_ts = float(incoming["ts"].iloc[0])
+            # Freeze the archive before the configured overlap, regardless
+            # of how much older history the download contains.
             prefix = current[current["ts"] < replacement_start_ts]
             replaced_rows = int(len(current) - len(prefix))
             merged = pd.concat([prefix, incoming], ignore_index=True)
@@ -137,6 +166,6 @@ def merge_and_save_parquet(
         "deduped": deduped,
         "replaced_rows": replaced_rows,
         "replacement_start_ts": replacement_start_ts,
-        "merge_mode": "replace_range_suffix" if is_range else "upsert_timestamp",
+        "merge_mode": "replace_range_overlap" if is_range else "upsert_timestamp",
         "after_last_row": after_last_row,
     }

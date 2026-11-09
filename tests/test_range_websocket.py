@@ -88,6 +88,15 @@ def test_each_delta_bar_keeps_its_own_values_and_same_second_order(monkeypatch):
     assert frame["volume"].tolist() == [11, 21]
 
 
+def test_real_nochange_delta_does_not_invalidate_a_completed_snapshot(monkeypatch):
+    # Captured from TradingView on 2026-11-09, including its empty d string.
+    frame = run_snapshot(monkeypatch, delta={
+        "s": [], "ns": {"d": "", "indexes": "nochange"},
+        "lbs": {"bar_close_time": 1000},
+    })
+    assert frame["close"].tolist() == [1.5, 2.5]
+
+
 def test_mismatched_delta_bars_and_indexes_cannot_clone_one_bar(monkeypatch):
     with pytest.raises(RuntimeError, match="delta"):
         run_snapshot(monkeypatch, delta={

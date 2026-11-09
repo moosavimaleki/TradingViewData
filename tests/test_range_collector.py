@@ -28,8 +28,8 @@ def test_collector_replaces_range_snapshot_and_retains_same_time_candles(tmp_pat
     })
     old.to_parquet(path, index=False)
     raw = old.copy()
-    raw["ts"] = [1, 2, 2, 4, 5, 6]
-    raw["close"] = [1.5, 1.2, 1.3, 1.4, 1.5, 1.6]
+    raw["ts"] = [1, 2, 2, 3, 5, 6]
+    raw["close"] = [2.5, 1.2, 1.3, 1.5, 1.7, 1.6]
     raw = raw.rename(columns={"ts": "timestamp"})
     raw["bar_index"] = range(10, 16)
 
@@ -74,12 +74,12 @@ def test_collector_replaces_range_snapshot_and_retains_same_time_candles(tmp_pat
         assert_frame_equal(saved, old)
         assert summary["failed"][0]["error"] == "RuntimeError: merge failed"
         return
-    assert saved["ts"].tolist() == [1, 2, 2, 4, 5]
-    assert saved["close"].tolist() == [1.5, 1.2, 1.3, 1.4, 1.5]
+    assert saved["ts"].tolist() == [1, 2, 2, 3, 5]
+    assert saved["close"].tolist() == [1.5, 1.5, 1.5, 1.5, 1.7]
     assert saved["faraz"].tolist() == [0] * 5
     assert not summary["failed"]
     result = summary["ok"][0]
     assert result["rows_before"] == 6
     assert result["rows_after"] == 5
-    assert result["replaced_rows"] == 6
+    assert result["replaced_rows"] == 3
     assert result["deduped"] == 0
