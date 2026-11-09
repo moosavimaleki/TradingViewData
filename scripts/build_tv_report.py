@@ -27,6 +27,7 @@ def _totals(ok: List[Dict[str, Any]], skipped: List[Dict[str, Any]], failed: Lis
     total_after = sum(int(item.get("rows_after", 0) or 0) for item in ok)
     total_new = sum(int(item.get("fetched_rows", 0) or 0) for item in ok)
     total_deduped = sum(int(item.get("deduped", 0) or 0) for item in ok)
+    total_replaced = sum(int(item.get("replaced_rows", 0) or 0) for item in ok)
     return {
         "ok_count": len(ok),
         "skipped_count": len(skipped),
@@ -35,6 +36,7 @@ def _totals(ok: List[Dict[str, Any]], skipped: List[Dict[str, Any]], failed: Lis
         "rows_new_total": total_new,
         "rows_after_total": total_after,
         "deduped_total": total_deduped,
+        "replaced_total": total_replaced,
         "net_growth": total_after - total_before,
     }
 
@@ -238,6 +240,7 @@ def _build_markdown(
     lines.append(f"- rows_new_total: {_fmt_int(totals['rows_new_total'])}")
     lines.append(f"- rows_after_total: {_fmt_int(totals['rows_after_total'])}")
     lines.append(f"- deduped_total: {_fmt_int(totals['deduped_total'])}")
+    lines.append(f"- replaced_total: {_fmt_int(totals['replaced_total'])}")
     lines.append(f"- net_growth: {_fmt_int(totals['net_growth'])}")
     lines.append("")
 
@@ -253,6 +256,7 @@ def _build_markdown(
             after = _as_int(item.get("rows_after", 0))
             fetched = _as_int(item.get("fetched_rows", 0))
             overridden = _as_int(item.get("deduped", 0))
+            overridden += _as_int(item.get("replaced_rows", 0))
             added = after - before
             lines.append(
                 "| {symbol} | {tf} | {added} | {overridden} | {mode} | {before} | {fetched} | {after} | {overlap_rows} | {overlap_min} | {prev_last} | {new_first} | {new_last} | {after_last} |".format(

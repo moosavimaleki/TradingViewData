@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 REQUIRED_NUMERIC = ("open", "high", "low", "close", "volume")
@@ -47,6 +48,7 @@ def normalize_frame(
     df: pd.DataFrame | None,
     *,
     drop_latest_candle: bool,
+    is_range: bool = False,
 ) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame(columns=["ts", *REQUIRED_NUMERIC, PROVENANCE_COLUMN])
@@ -86,14 +88,20 @@ def normalize_frame(
 
     for col in REQUIRED_NUMERIC:
         out[col] = pd.to_numeric(out[col], errors="coerce")
-        if col == "volume":
+        if col == "volume" and not is_range:
             out[col] = out[col].fillna(0.0)
     out[PROVENANCE_COLUMN] = pd.to_numeric(out[PROVENANCE_COLUMN], errors="coerce").fillna(0)
     out[PROVENANCE_COLUMN] = (out[PROVENANCE_COLUMN] != 0).astype("int8")
 
+    if is_range and not np.isfinite(out[["ts", *REQUIRED_NUMERIC]].to_numpy(dtype="float64")).all():
+        raise ValueError("Range snapshot contains invalid candle values; refusing to discard bars")
     out = out.dropna(subset=["ts", "open", "high", "low", "close"])
-    out = out.sort_values("ts")
-    out = out.drop_duplicates(subset=["ts"], keep="last").reset_index(drop=True)
+    if not is_range:
+        out = out.sort_values("ts", kind="stable")
+        out = out.drop_duplicates(subset=["ts"], keep="last")
+    # Range bars can share timestamps. Their order is the source series order,
+    # already established by the WebSocket fetcher's session-local bar indexes.
+    out = out.reset_index(drop=True)
 
     if drop_latest_candle and not out.empty:
         out = out.iloc[:-1].reset_index(drop=True)

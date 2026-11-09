@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      RAW_ROOT: ${{ format('{0}/raw', github.event.inputs.data_root || 'data') }}
 
     steps:
       - uses: actions/checkout@v4
@@ -125,7 +127,7 @@ jobs:
             sleep 5
           done
 
-      - name: Install rclone (optional persistence)
+      - name: Install rclone (required for raw backup)
         env:
           RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
         run: |
@@ -134,7 +136,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y rclone
           else
-            echo "RCLONE_CONF not set. Skipping rclone install."
+            echo "::error::RCLONE_CONF is required to preserve raw data before publishing updates."
+            exit 1
           fi
 
       - name: Configure rclone (OAuth)
@@ -144,9 +147,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${RCLONE_CONF:-}" ]; then
-            echo "RCLONE_CONF not set. Skipping rclone config."
-            echo "RCLONE_ENABLED=0" >> "$GITHUB_ENV"
-            exit 0
+            echo "::error::RCLONE_CONF is required for raw backups."
+            exit 1
           fi
 
           mkdir -p ~/.config/rclone
@@ -195,6 +197,7 @@ jobs:
             --verbose
 
       - name: Run simple tvdatafeed collector
+        id: collect
         env:
           PYTHONUNBUFFERED: "1"
         run: |
@@ -209,10 +212,41 @@ jobs:
           python collector/simple_tvdatafeed_collector.py \
             --config "$CONFIG_PATH" \
             --data-root "$DATA_ROOT" \
+            --raw-root "$RAW_ROOT" \
             --overlap-bars "$OVERLAP_BARS" \
             --initial-bars "$INITIAL_BARS" \
             --max-bars "$MAX_BARS" \
             | tee tvdatafeed_summary.json
+
+      - name: Seal and verify raw archive (also after collector failure)
+        id: seal_raw
+        if: always() && steps.collect.outcome != 'skipped' && steps.collect.outcome != ''
+        run: |
+          set -euo pipefail
+          python scripts/finalize_raw_archive.py --raw-root "$RAW_ROOT"
+
+      - name: Upload immutable raw archive to Drive
+        id: push_raw
+        if: always() && steps.seal_raw.outcome == 'success' && env.RCLONE_ENABLED == '1'
+        run: |
+          set -euo pipefail
+          RAW_REMOTE="${RCLONE_REMOTE_PATH%/}/raw"
+          echo "Preserving raw archives: $RAW_ROOT -> $RAW_REMOTE"
+          rclone copy "$RAW_ROOT" "$RAW_REMOTE" \
+            --include '**/data.parquet' --include '**/manifest.json' \
+            --immutable --checksum --stats 15s -v
+          rclone check "$RAW_ROOT" "$RAW_REMOTE" --one-way \
+            --include '**/data.parquet' --include '**/manifest.json' -v
+
+      - name: Preserve raw files as recovery artifact if Drive backup failed
+        if: always() && steps.collect.outcome != 'skipped' && steps.collect.outcome != '' && steps.push_raw.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.RAW_ROOT }}
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Build detailed report artifacts
         if: always() && env.RUN_MODE == 'major'
@@ -247,7 +281,7 @@ jobs:
           sed -n '1,220p' tvdatafeed_report.md
 
       - name: Push updated tvdatafeed files to Drive (optional)
-        if: always()
+        if: always() && steps.push_raw.outcome == 'success'
         run: |
           set -euo pipefail
           if [ "${RCLONE_ENABLED:-0}" != "1" ]; then

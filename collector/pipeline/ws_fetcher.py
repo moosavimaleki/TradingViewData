@@ -6,6 +6,7 @@ import random
 import re
 import string
 import time
+from contextlib import nullcontext
 from typing import Dict, List
 
 import pandas as pd
@@ -50,17 +51,30 @@ def _random_id(prefix: str) -> str:
 
 
 class TradingViewWSFetcher:
-    def __init__(self, *, timeout_sec: int = 30, page_step: int = 2000) -> None:
+    def __init__(self, *, timeout_sec: int = 30, page_step: int = 2000, raw_archive=None) -> None:
         self.timeout_sec = int(timeout_sec)
         self.page_step = int(page_step)
+        self.raw_archive = raw_archive
 
     def fetch_latest_range(self, *, symbol: str, broker: str, timeframe: str, n_bars: int) -> pd.DataFrame:
         if not re.fullmatch(r"[0-9]+[rR]", str(timeframe).strip()):
             raise ValueError(f"timeframe={timeframe!r} is not a range timeframe")
-        tv_symbol = f"{broker}:{symbol}"
-        return asyncio.run(self._fetch_bars_ws(symbol=tv_symbol, interval=timeframe.upper(), n_bars=int(n_bars)))
+        return self._fetch_with_archive(symbol=symbol, broker=broker, interval=timeframe.upper(), n_bars=n_bars)
 
-    async def _fetch_bars_ws(self, *, symbol: str, interval: str, n_bars: int) -> pd.DataFrame:
+    def _fetch_with_archive(self, *, symbol: str, broker: str, interval: str, n_bars: int):
+        capture = self.raw_archive.request(
+            source="tradingview", symbol=symbol, broker=broker,
+            timeframe=interval, requested_bars=n_bars,
+        ) if self.raw_archive else nullcontext()
+        with capture as raw_request:
+            frame = asyncio.run(self._fetch_bars_ws(
+                symbol=f"{broker}:{symbol}", interval=interval, n_bars=int(n_bars), raw_request=raw_request,
+            ))
+            if raw_request is not None:
+                raw_request.frame(frame)
+            return frame
+
+    async def _fetch_bars_ws(self, *, symbol: str, interval: str, n_bars: int, raw_request=None) -> pd.DataFrame:
         user_agent = (
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
@@ -79,6 +93,7 @@ class TradingViewWSFetcher:
         initial_bars = min(target_bars, 5000)
 
         bars_by_index: Dict[int, list] = {}
+        series_completed = False
         start = time.time()
 
         range_match = re.fullmatch(r"([0-9]+)[rR]", str(interval).strip())
@@ -90,57 +105,64 @@ class TradingViewWSFetcher:
             await ws.send(_ws_frame(msg))
 
         async def handle_payload(ws, payload: str) -> None:
+            nonlocal series_completed
             if payload.startswith("~h~"):
                 await ws.send(_ws_frame(payload))
                 return
 
-            if "timescale_update" in payload:
-                try:
-                    message = json.loads(payload)
-                    series = message["p"][1][series_id]["s"]
-                except Exception:
-                    return
-                for row in series:
-                    bars_by_index[int(row["i"])] = row["v"]
+            try:
+                message = json.loads(payload)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("Invalid TradingView websocket JSON") from exc
+            if not isinstance(message, dict):
                 return
-
-            if is_range and ("\"m\":\"du\"" in payload or "\"m\": \"du\"" in payload or payload.startswith("{\"m\":\"du\"")):
+            method = message.get("m")
+            p = message.get("p")
+            if method in {"series_error", "symbol_error", "critical_error", "protocol_error"}:
+                raise RuntimeError(f"TradingView {method}: {p}")
+            if not isinstance(p, list) or len(p) < 2 or p[0] != chart_session:
+                return
+            if method == "series_completed" and p[1] == series_id:
+                series_completed = True
+                return
+            if method not in {"timescale_update", "du"} or not isinstance(p[1], dict):
+                return
+            series = p[1].get(series_id)
+            if not isinstance(series, dict):
+                return
+            if "s" in series:
                 try:
-                    message = json.loads(payload)
-                    p = message.get("p")
-                    if not (isinstance(p, list) and len(p) >= 2 and isinstance(p[1], dict)):
-                        return
-                    series = p[1].get(series_id)
-                    if not isinstance(series, dict):
-                        return
-                    ns = series.get("ns")
-                    if not isinstance(ns, dict):
-                        return
-                    d = ns.get("d")
-                    idxs = ns.get("indexes")
+                    for row in series["s"]:
+                        values = row["v"]
+                        if len(values) < 5:
+                            raise ValueError("missing candle values")
+                        bars_by_index[int(row["i"])] = values
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RuntimeError("Invalid TradingView series bars") from exc
+
+            if is_range and method == "du" and "ns" in series:
+                try:
+                    ns = series["ns"]
+                    idxs = ns["indexes"]
+                    bars = json.loads(ns["d"])["data"]["bars"]
+                    if not isinstance(idxs, list) or not isinstance(bars, list) or len(bars) != len(idxs):
+                        raise ValueError("bar and index counts differ")
                     close_time = (series.get("lbs") or {}).get("bar_close_time")
-                    if not (isinstance(d, str) and isinstance(idxs, list) and close_time is not None):
-                        return
-                    dd = json.loads(d)
-                    bars = (dd.get("data") or {}).get("bars") or []
-                    if not bars:
-                        return
-                    b0 = bars[0]
-                    v = [
-                        0.0,
-                        float(b0["open"]),
-                        float(b0["high"]),
-                        float(b0["low"]),
-                        float(b0["close"]),
-                        float(b0.get("volume", 0.0)),
-                    ]
-                    for i in idxs:
-                        idx = int(i)
+                    for index, bar in zip(idxs, bars, strict=True):
+                        idx = int(index)
                         existing = bars_by_index.get(idx)
-                        t = float(existing[0]) if existing else float(close_time)
-                        bars_by_index[idx] = [t, v[1], v[2], v[3], v[4], v[5]]
-                except Exception:
-                    return
+                        if existing is not None:
+                            timestamp = existing[0]
+                        elif len(bars) == 1 and close_time is not None:
+                            timestamp = close_time
+                        else:
+                            raise ValueError("missing per-bar timestamp")
+                        bars_by_index[idx] = [
+                            float(timestamp), float(bar["open"]), float(bar["high"]),
+                            float(bar["low"]), float(bar["close"]), float(bar.get("volume", 0.0)),
+                        ]
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RuntimeError(f"Invalid range delta: {exc}") from exc
 
         async def recv_for(ws, seconds: int) -> None:
             t0 = time.time()
@@ -151,10 +173,14 @@ class TradingViewWSFetcher:
                     if isinstance(exc, ws_exceptions.ConnectionClosed):
                         raise RuntimeError(f"websocket closed: {exc}") from exc
                     continue
+                if raw_request is not None:
+                    raw_request.message(raw)
                 if isinstance(raw, bytes):
                     raw = raw.decode("utf-8", "replace")
                 for payload in _ws_decode(raw) or [raw]:
                     await handle_payload(ws, payload)
+                if series_completed:
+                    return
 
         async with websockets.connect(
             WS_URL,
@@ -202,6 +228,8 @@ class TradingViewWSFetcher:
             await send_msg(ws, "switch_timezone", [chart_session, "exchange"])
 
             await recv_for(ws, seconds=min(20, self.timeout_sec))
+            if not series_completed:
+                raise RuntimeError("TradingView snapshot did not complete before timeout")
 
             if self.page_step > 0:
                 stagnant_rounds = 0
@@ -215,8 +243,11 @@ class TradingViewWSFetcher:
                     req = min(int(self.page_step), need)
                     if req <= 0:
                         break
+                    series_completed = False
                     await send_msg(ws, "request_more_data", [chart_session, series_id, req])
                     await recv_for(ws, seconds=12)
+                    if not series_completed:
+                        raise RuntimeError("TradingView history page did not complete before timeout")
                     if len(bars_by_index) <= prev_count:
                         stagnant_rounds += 1
                         if stagnant_rounds >= 3:
@@ -226,9 +257,12 @@ class TradingViewWSFetcher:
 
         if not bars_by_index:
             raise RuntimeError("No bars received from TradingView websocket.")
+        indexes = sorted(bars_by_index)
+        if is_range and any(right != left + 1 for left, right in zip(indexes, indexes[1:])):
+            raise RuntimeError("TradingView range snapshot has gaps in bar indexes")
 
         rows = []
-        for idx in sorted(bars_by_index.keys()):
+        for idx in indexes:
             v = bars_by_index[idx]
             rows.append(
                 {
@@ -242,4 +276,3 @@ class TradingViewWSFetcher:
                 }
             )
         return pd.DataFrame(rows)
-

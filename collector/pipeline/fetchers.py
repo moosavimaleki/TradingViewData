@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -49,16 +50,25 @@ TIMEFRAME_SECONDS: Dict[str, int] = {
 
 
 class TvDatafeedFetcher:
-    def __init__(self) -> None:
+    def __init__(self, *, raw_archive=None) -> None:
+        self.raw_archive = raw_archive
         self._tv = TvDatafeed()
 
     def fetch_latest(self, *, symbol: str, exchange: str, timeframe: str, n_bars: int) -> pd.DataFrame:
-        return self._tv.get_hist(
-            symbol=symbol,
-            exchange=exchange,
-            interval=INTERVAL_MAP[timeframe],
-            n_bars=int(n_bars),
-        )
+        capture = self.raw_archive.request(
+            source="tradingview", symbol=symbol, broker=exchange,
+            timeframe=timeframe, requested_bars=n_bars,
+        ) if self.raw_archive else nullcontext()
+        with capture as raw_request:
+            frame = self._tv.get_hist(
+                symbol=symbol,
+                exchange=exchange,
+                interval=INTERVAL_MAP[timeframe],
+                n_bars=int(n_bars),
+            )
+            if raw_request is not None:
+                raw_request.frame(frame)
+        return frame
 
 
 def compute_time_n_bars(
