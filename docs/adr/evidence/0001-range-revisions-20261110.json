@@ -1,0 +1,314 @@
+{
+  "observed_date_UTC": "2026-11-10",
+  "examples": [
+    {
+      "minute_UTC": "2026-11-10T09:45:00Z",
+      "sides": {
+        "old": {
+          "captured_UTC": "2026-11-10T10:06:59.751145+00:00",
+          "run_id": "20261110T100659743530Z-af5567c36b6d465e9654fec2ad6713a6",
+          "request_id": "r000001",
+          "requested_bars": 2000,
+          "age_hours": 0.3665975402461158,
+          "rows": [
+            {
+              "index": 1934,
+              "vector": [
+                1794303901.0,
+                4084.7200000000003,
+                4084.82,
+                4083.82,
+                4083.82,
+                76.0
+              ],
+              "event_sequence": 5,
+              "method": "timescale_update",
+              "payload_sha256": "f4656dc9204e7037d4fabb60982070149cbd79c6a09f9eabd2f2cb57e0e017cb"
+            },
+            {
+              "index": 1935,
+              "vector": [
+                1794303910.0,
+                4083.42,
+                4083.9500000000003,
+                4082.9500000000003,
+                4082.9500000000003,
+                184.0
+              ],
+              "event_sequence": 5,
+              "method": "timescale_update",
+              "payload_sha256": "f4656dc9204e7037d4fabb60982070149cbd79c6a09f9eabd2f2cb57e0e017cb"
+            },
+            {
+              "index": 1936,
+              "vector": [
+                1794303927.0,
+                4082.9100000000003,
+                4083.34,
+                4082.34,
+                4082.34,
+                168.0
+              ],
+              "event_sequence": 5,
+              "method": "timescale_update",
+              "payload_sha256": "f4656dc9204e7037d4fabb60982070149cbd79c6a09f9eabd2f2cb57e0e017cb"
+            },
+            {
+              "index": 1937,
+              "vector": [
+                1794303938.0,
+                4082.25,
+                4083.25,
+                4082.25,
+                4083.25,
+                76.0
+              ],
+              "event_sequence": 5,
+              "method": "timescale_update",
+              "payload_sha256": "f4656dc9204e7037d4fabb60982070149cbd79c6a09f9eabd2f2cb57e0e017cb"
+            },
+            {
+              "index": 1938,
+              "vector": [
+                1794303947.0,
+                4083.27,
+                4084.02,
+                4083.02,
+                4084.02,
+                248.0
+              ],
+              "event_sequence": 5,
+              "method": "timescale_update",
+              "payload_sha256": "f4656dc9204e7037d4fabb60982070149cbd79c6a09f9eabd2f2cb57e0e017cb"
+            }
+          ],
+          "all_context_vectors_verified": 14,
+          "raw_archive_sha256": "61f737d97e18c9b5be4a42c2dc8c0c7ff91dcf01b46e21c08f3b279488867686",
+          "raw_archive_events_sha256": "c03ecc3770322399a92f4ab170fea68279ee2db6b6732381a422dc999da72006",
+          "github_run_id": null,
+          "github_run_url": null
+        },
+        "new": {
+          "captured_UTC": "2026-11-10T11:17:57.940293+00:00",
+          "run_id": "20261110T111752347706Z-ee24a78a52d647a5aec63ddec28dfba9",
+          "request_id": "r000005",
+          "requested_bars": 2000,
+          "age_hours": 1.5494278591871262,
+          "rows": [
+            {
+              "index": 1797,
+              "vector": [
+                1794303901.0,
+                4084.7200000000003,
+                4084.82,
+                4083.82,
+                4083.82,
+                76.0
+              ],
+              "event_sequence": 39,
+              "method": "timescale_update",
+              "payload_sha256": "570450475e6373199143f11f171d68611bf1b8452e9ab80f5279c626750f264a"
+            },
+            {
+              "index": 1798,
+              "vector": [
+                1794303910.0,
+                4083.42,
+                4083.5,
+                4082.5,
+                4082.5,
+                208.0
+              ],
+              "event_sequence": 39,
+              "method": "timescale_update",
+              "payload_sha256": "570450475e6373199143f11f171d68611bf1b8452e9ab80f5279c626750f264a"
+            },
+            {
+              "index": 1799,
+              "vector": [
+                1794303938.0,
+                4082.4900000000002,
+                4083.25,
+                4082.25,
+                4083.25,
+                80.0
+              ],
+              "event_sequence": 39,
+              "method": "timescale_update",
+              "payload_sha256": "570450475e6373199143f11f171d68611bf1b8452e9ab80f5279c626750f264a"
+            },
+            {
+              "index": 1800,
+              "vector": [
+                1794303947.0,
+                4083.27,
+                4084.02,
+                4083.02,
+                4084.02,
+                206.0
+              ],
+              "event_sequence": 39,
+              "method": "timescale_update",
+              "payload_sha256": "570450475e6373199143f11f171d68611bf1b8452e9ab80f5279c626750f264a"
+            }
+          ],
+          "all_context_vectors_verified": 13,
+          "raw_archive_sha256": "d9a4a27b3612f9c9b63ed8ea4cda1d59caa9851f8f7e77c0908d2a3dc520850b",
+          "raw_archive_events_sha256": "30b9d9f17a07a8be273392c220d1146cc184f3c87afbd207c4bda1f4ac0c3338",
+          "github_run_id": "42801136658",
+          "github_run_url": "https://github.com/moosavimaleki/TradingViewData/actions/runs/42801136658"
+        }
+      }
+    },
+    {
+      "minute_UTC": "2026-11-09T14:00:00Z",
+      "sides": {
+        "old": {
+          "captured_UTC": "2026-11-10T02:10:05.624071+00:00",
+          "run_id": "20261110T020955621941Z-5c2f36972d3e4d79be1ae730562bbe18",
+          "request_id": "r000010",
+          "requested_bars": 2000,
+          "age_hours": 12.168228908578556,
+          "rows": [
+            {
+              "index": 157,
+              "vector": [
+                1794232814.0,
+                4126.08,
+                4126.66,
+                4125.66,
+                4125.66,
+                137.0
+              ],
+              "event_sequence": 56,
+              "method": "timescale_update",
+              "payload_sha256": "61f6fc42eacf39821619568bcb951471eb74cd9b0f6ce9a3c800f29ef356701a"
+            },
+            {
+              "index": 158,
+              "vector": [
+                1794232827.0,
+                4125.64,
+                4126.06,
+                4125.06,
+                4125.06,
+                95.0
+              ],
+              "event_sequence": 56,
+              "method": "timescale_update",
+              "payload_sha256": "61f6fc42eacf39821619568bcb951471eb74cd9b0f6ce9a3c800f29ef356701a"
+            },
+            {
+              "index": 159,
+              "vector": [
+                1794232837.0,
+                4124.86,
+                4125.32,
+                4124.32,
+                4124.32,
+                114.0
+              ],
+              "event_sequence": 56,
+              "method": "timescale_update",
+              "payload_sha256": "61f6fc42eacf39821619568bcb951471eb74cd9b0f6ce9a3c800f29ef356701a"
+            },
+            {
+              "index": 160,
+              "vector": [
+                1794232850.0,
+                4124.06,
+                4124.77,
+                4123.77,
+                4123.77,
+                242.0
+              ],
+              "event_sequence": 56,
+              "method": "timescale_update",
+              "payload_sha256": "61f6fc42eacf39821619568bcb951471eb74cd9b0f6ce9a3c800f29ef356701a"
+            }
+          ],
+          "all_context_vectors_verified": 9,
+          "raw_archive_sha256": "db13fd017ed0a6549f2115ed3a3f2372223d54346fa1150bf7d3b8a5777620a1",
+          "raw_archive_events_sha256": "3e0eb669bdce3d165993f64812f05e310b59b4350291ac8332ee8015dae761ac",
+          "github_run_id": "42735499777",
+          "github_run_url": "https://github.com/moosavimaleki/TradingViewData/actions/runs/42735499777"
+        },
+        "new": {
+          "captured_UTC": "2026-11-10T07:06:19.958991+00:00",
+          "run_id": "20261110T070619952487Z-fb06ac1173c14d4bbf1d4de18700fc93",
+          "request_id": "r000001",
+          "requested_bars": 12000,
+          "age_hours": 17.105544164180756,
+          "rows": [
+            {
+              "index": 3363,
+              "vector": [
+                1794232800.0,
+                4126.66,
+                4126.66,
+                4125.66,
+                4125.66,
+                137.0
+              ],
+              "event_sequence": 6,
+              "method": "timescale_update",
+              "payload_sha256": "292862e9ff5e21d921b053584f8fefaa95645cc39928ef49d8db9fe155436786"
+            },
+            {
+              "index": 3364,
+              "vector": [
+                1794232800.001,
+                4123.86,
+                4124.77,
+                4123.77,
+                4123.77,
+                520.0
+              ],
+              "event_sequence": 6,
+              "method": "timescale_update",
+              "payload_sha256": "292862e9ff5e21d921b053584f8fefaa95645cc39928ef49d8db9fe155436786"
+            }
+          ],
+          "all_context_vectors_verified": 5,
+          "raw_archive_sha256": "5278bd90b06cb0ad48e6a2233f8a171d8860768b4633bf980971e6c2a34f51fa",
+          "raw_archive_events_sha256": "8704de4e7ad9d37af91c8a06428d58c36ba818020a15300d0309cf55369904a0",
+          "github_run_id": null,
+          "github_run_url": null
+        }
+      }
+    }
+  ],
+  "all_example_vectors_match_explicit_wire_rows": true,
+  "source": "Public raw/tradingview archives plus manual ordinary websocket controls; raw manifest SHA-256 verified. Values are s[].v before normalization or merge.",
+  "minute_age_exposure": {
+    "0-1h": {
+      "all_minutes": 112,
+      "same_count_gap_at_least_5min": 0
+    },
+    "1-3h": {
+      "all_minutes": 1172,
+      "same_count_gap_at_least_5min": 815
+    },
+    "3-6h": {
+      "all_minutes": 3140,
+      "same_count_gap_at_least_5min": 2585
+    },
+    "6-12h": {
+      "all_minutes": 12239,
+      "same_count_gap_at_least_5min": 11097
+    },
+    "12-24h": {
+      "all_minutes": 18979,
+      "same_count_gap_at_least_5min": 16994
+    },
+    "24-48h": {
+      "all_minutes": 9503,
+      "same_count_gap_at_least_5min": 9231
+    },
+    "48-infh": {
+      "all_minutes": 127896,
+      "same_count_gap_at_least_5min": 124822
+    }
+  },
+  "interpretation": "Capture-time age brackets the revision; no universal TTL. Seconds precision is not tick-truth proof."
+}

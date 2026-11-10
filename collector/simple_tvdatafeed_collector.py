@@ -21,6 +21,7 @@ from collector.pipeline.config import is_range_timeframe, load_jobs, normalize_t
 from collector.pipeline.fetchers import INTERVAL_MAP, TvDatafeedFetcher, compute_time_n_bars
 from collector.pipeline.normalize import normalize_frame
 from collector.pipeline.raw_archive import RawArchive, RawArchiveError
+from collector.pipeline.range_guard import guarded_save
 from collector.pipeline.storage import (
     RangeBoundaryError,
     load_existing_parquet,
@@ -75,6 +76,7 @@ def _fetch_range_with_overlap(
     overlap_bars: int,
     initial_bars: int,
     max_bars: int,
+    inspect_snapshot=None,
 ) -> tuple[Any, Dict[str, Any]]:
     cutoff_ts = range_cutoff_ts(existing_df, overlap_bars)
     n_bars = max(1, min(int(initial_bars), int(max_bars)))
@@ -149,6 +151,8 @@ def _fetch_range_with_overlap(
         "snapshot_first_ts": snapshot_first_ts,
         "snapshot_last_ts": snapshot_last_ts,
     }
+    if inspect_snapshot is not None:
+        inspect_snapshot(received)
     return fetched.reset_index(drop=True), diag
 
 
@@ -165,6 +169,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--range-overlap-bars", type=int, default=300)
     p.add_argument("--range-initial-bars", type=int, default=2000)
     p.add_argument("--range-max-bars", type=int, default=12000)
+    p.add_argument("--range-source-policy", choices=("protect", "report-only"), default="protect",
+                   help="protect checks source before yearly writes; report-only retains legacy overlap behavior")
+    p.add_argument("--range-fallback", choices=("missing-only", "none"), default="missing-only",
+                   help="Keep M1-replayed blocks only outside known archive coverage, in separate evidence files")
+    p.add_argument("--range-reference-bars", type=int, default=10000)
     p.add_argument("--log-level", default=os.getenv("TV_SIMPLE_COLLECTOR_LOG_LEVEL", "INFO"))
     return p.parse_args()
 
@@ -190,6 +199,7 @@ def _run_collection(args, raw_archive: RawArchive) -> None:
     )
 
     summary = {"ok": [], "skipped": [], "failed": []}
+    range_references = {}
 
     for job in jobs:
         if job.source not in {"tradingview", "tv"}:
@@ -229,6 +239,7 @@ def _run_collection(args, raw_archive: RawArchive) -> None:
             )
 
             if is_range:
+                snapshots = []
                 new_df, diag = _fetch_range_with_overlap(
                     ws_fetcher=ws_fetcher,
                     symbol=symbol,
@@ -238,6 +249,7 @@ def _run_collection(args, raw_archive: RawArchive) -> None:
                     overlap_bars=max(1, int(args.range_overlap_bars)),
                     initial_bars=max(1, int(args.range_initial_bars)),
                     max_bars=max(1, int(args.range_max_bars)),
+                    inspect_snapshot=snapshots.append,
                 )
                 diag["configured_overlap_bars"] = int(max(1, int(args.range_overlap_bars)))
             else:
@@ -276,12 +288,40 @@ def _run_collection(args, raw_archive: RawArchive) -> None:
             if old_last_ts is not None and new_first_ts is not None and old_last_ts >= new_first_ts:
                 overlap_seconds = float(old_last_ts - new_first_ts)
 
-            merge_stats = merge_and_save_parquet(
-                out_file, old_df, new_df, is_range=is_range,
-                range_overlap_bars=max(1, int(args.range_overlap_bars)),
-                snapshot_first_ts=diag.get("snapshot_first_ts") if is_range else None,
-                snapshot_last_ts=diag.get("snapshot_last_ts") if is_range else None,
-            )
+            if is_range and getattr(args, "range_source_policy", "protect") == "protect":
+                key = (exchange, symbol)
+                range_request_id = f"r{raw_archive.requests:06d}"
+                if key not in range_references:
+                    try:
+                        minute = ws_fetcher.fetch_latest_time(symbol=symbol, broker=exchange, timeframe="1",
+                            n_bars=max(1, min(12000, getattr(args, "range_reference_bars", 10000))))
+                        range_references[key] = (minute, None)
+                    except RawArchiveError:
+                        raise
+                    except Exception as exc:
+                        range_references[key] = (None, f"{type(exc).__name__}: {exc}")
+                minute, reference_error = range_references[key]
+                meta = {"run_id": raw_archive.run_id, "request_id": range_request_id,
+                        "broker": exchange, "symbol": symbol, "timeframe": tf,
+                        "raw_directory": str(raw_archive.run_dir),
+                        "captured_at_UTC": datetime.now(timezone.utc).isoformat()}
+                folder = data_root/"range_guard"/raw_archive.run_id/exchange/tf/symbol
+                merge_stats = guarded_save(out_file, old_df, snapshots[-1], minute, folder=folder, meta=meta,
+                    overlap_bars=max(1, int(args.range_overlap_bars)),
+                    fallback=getattr(args, "range_fallback", "missing-only"), reference_error=reference_error)
+                diag["source_guard"] = merge_stats["source_guard"]
+                if not merge_stats["primary_modified"]:
+                    summary["skipped"].append({"symbol": f"{symbol}:{exchange}", "timeframe": tf,
+                        "reason": "Source guard preserved the primary archive", "details": diag,
+                        "file": str(out_file)})
+                    continue
+            else:
+                merge_stats = merge_and_save_parquet(
+                    out_file, old_df, new_df, is_range=is_range,
+                    range_overlap_bars=max(1, int(args.range_overlap_bars)),
+                    snapshot_first_ts=diag.get("snapshot_first_ts") if is_range else None,
+                    snapshot_last_ts=diag.get("snapshot_last_ts") if is_range else None,
+                )
             logger.info(
                 "saved symbol=%s:%s tf=%s merge_mode=%s before=%s fetched=%s replaced=%s deduped=%s after=%s",
                 symbol,

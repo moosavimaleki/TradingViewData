@@ -61,6 +61,17 @@ class TradingViewWSFetcher:
             raise ValueError(f"timeframe={timeframe!r} is not a range timeframe")
         return self._fetch_with_archive(symbol=symbol, broker=broker, interval=timeframe.upper(), n_bars=n_bars)
 
+    def fetch_latest_time(self, *, symbol: str, broker: str, timeframe: str, n_bars: int) -> pd.DataFrame:
+        """Fetch regular time bars with the same paginated websocket path.
+
+        Unlike ``TvDatafeed.get_hist`` this can request more than 5000 bars by
+        paging the chart series. Timestamps are epoch UTC and therefore do not
+        inherit tvDatafeed's host-timezone parsing quirk.
+        """
+        if not str(timeframe).isdigit():
+            raise ValueError(f"timeframe={timeframe!r} must be a minute/hour interval")
+        return self._fetch_with_archive(symbol=symbol, broker=broker, interval=str(timeframe), n_bars=n_bars)
+
     def _fetch_with_archive(self, *, symbol: str, broker: str, interval: str, n_bars: int):
         capture = self.raw_archive.request(
             source="tradingview", symbol=symbol, broker=broker,

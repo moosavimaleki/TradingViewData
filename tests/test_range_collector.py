@@ -49,6 +49,7 @@ def test_collector_replaces_range_snapshot_and_retains_same_time_candles(tmp_pat
     monkeypatch.setattr(collector, "_parse_args", lambda: argparse.Namespace(
         config=str(config), data_root=str(tmp_path / "data"), log_level="INFO",
         range_overlap_bars=3, range_initial_bars=10, range_max_bars=20,
+        range_source_policy="report-only",
     ))
 
     if merge_fails:
